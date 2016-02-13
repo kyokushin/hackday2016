@@ -27,7 +27,7 @@ link_directories(${OpenCV_LIBRARY_DIRS})
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/configure.h.in" ${CONFIG_FILE} @ONLY)
 
-add_executable(main main.cpp ${CONFIG_FILE})
+add_executable(main main.cpp ${CONFIG_FILE} FrameComposer.h superpixel.cpp superpixel.h)
 target_link_libraries(main ${OpenCV_LIBRARIES})
 
 set(CompilerFlags

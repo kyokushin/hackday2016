@@ -8,6 +8,7 @@
 #include <configure.h>
 
 #include "FrameComposer.h"
+#include "superpixel.h"
 
 using namespace std;
 
@@ -375,11 +376,13 @@ void videoSplitter(const std::string& fname, vector<T>& dst, const int interval=
 	}
 }
 
+const bool USE_OHD3 = false;
+
 int main(int argc, char** argv){
 
 	cout << "start video split" << endl;
 	vector<ImageFileName> fnames;
-	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 10);
+	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 5);
 
 	cout << "start anti shake" << endl;
 	//vector<cv::Mat> dst;
@@ -389,13 +392,51 @@ int main(int argc, char** argv){
 	vector<ImageFileName> dst;
 	antiShake<ImageFileName, ImageFileName>(fnames, dst);
 
-	FrameComposer fcomp;
-	vector<string> resultDst;
-	for (int i = 0; i < dst.size(); i++){
-		resultDst.push_back(dst[i]);
-	}
-	fcomp.setFile(resultDst);
-	cv::Mat res = fcomp.exec();
+	if(USE_OHD3){
+		FrameComposer fcomp;
+		vector<string> resultDst;
+		for (int i = 0; i < dst.size(); i++){
+			resultDst.push_back(dst[i]);
+		}
+		fcomp.setFile(resultDst);
+		cv::Mat res = fcomp.exec();
 
-	cv::imwrite("result_erase_move_object.jpg", res);
+		cv::imwrite("result_erase_move_object.jpg", res);
+	}
+	else {
+
+		cout<< "exec super pix" <<endl;
+		int regionSize = 200;
+
+		vector<cv::Mat> resizeDst;
+		for(int i=0; i<dst.size(); i++){
+			cv::Mat image = dst[i];
+			cv::Mat resized;
+			cv::resize(image, resized, cv::Size(image.cols/regionSize * regionSize, image.rows/regionSize * regionSize));
+			cv::cvtColor(resized, resized, CV_BGR2GRAY);
+			resizeDst.push_back(resized);
+			cout<< "\t" << i << ":" << resized.size() <<endl;
+		}
+
+		Slic spx(regionSize);
+		
+		vector<cv::Mat> labelImages;
+		vector<cv::Mat> contourImages;
+		spx.calcSuperPixel(resizeDst, labelImages, contourImages, 20.0f, 100, 25);
+
+		cout<< "output super pix result" <<endl;
+		stringstream sstr;
+		for(int i=0; i<labelImages.size(); i++){
+			sstr.str("");
+			sstr << "labeled_image_" << i << ".jpg" <<flush;
+			string fname = sstr.str();
+			cout<< "\tlabeled:" << fname <<endl;
+			cv::imwrite(fname, contourImages[i]);
+		}
+
+	}
+
+	cout<< "end program" <<endl;
+
+
 }
