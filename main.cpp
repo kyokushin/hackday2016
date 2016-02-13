@@ -123,6 +123,7 @@ void antiShake(const vector<T>& images, vector<S>& dst){
 	//image rect
 	int left(0), right(image0.cols), top(0), bottom(image0.rows);
 
+	vector<cv::Mat> transformedImages;
 	for (int j = 1; j < images.size(); j++){
 		int operation_count = 0;
 		cout << "current image " << j << endl;
@@ -311,19 +312,18 @@ void antiShake(const vector<T>& images, vector<S>& dst){
 			cv::imwrite(sstr.str(), resImage);
 
 		}
-		dst.push_back(image1resImage);
+		transformedImages.push_back(image1resImage);
 	}
 
 	cout << "crop result images" << endl;
 	cv::Rect internalRect(left,top, right - left, bottom - top);
 	cout << internalRect << endl;
 	stringstream sstr;
-	for (int i = 0; i < dst.size(); i++){
-		sstr.str("");
-		sstr << "anti_shake_result_" << setw(5) << setfill('0') << i << ".jpg" << flush;
-		string fname = sstr.str();
-		cout << "\t" << fname << endl;
-		cv::imwrite(fname, cv::Mat(dst[i], internalRect));
+	{
+		dst.push_back(cv::Mat(images[0], internalRect));
+	}
+	for (int i = 0; i < transformedImages.size(); i++){
+		dst.push_back( cv::Mat(transformedImages[i], internalRect));
 	}
 }
 
@@ -390,7 +390,13 @@ struct MouseEventParams{
 	cv::Mat showImage;
 	const string wname = "result";
 
+	cv::Mat mask;
+
+	cv::Scalar mouseColor = cv::Scalar(0,0,255);
+
 	bool leftDown = false;
+	bool rightDown = false;
+	bool working = false;
 
 	void init(vector<cv::Mat>& srcImages, vector<cv::Mat>& labeledImages){
 		if (labeledImages.size() == 0){
@@ -403,13 +409,17 @@ struct MouseEventParams{
 
 		cv::Mat& image = labeledImages[0];
 		selectedMap = cv::Mat(image.rows, image.cols, CV_32SC1);
-		result = cv::Mat::zeros(image.rows, image.cols, CV_8UC3);
+		result = srcImages[0].clone();
 		resultFilled = cv::Mat(image.rows, image.cols, CV_8UC1);
-		resultFilled.setTo(255);
+		resultFilled.setTo(0);
 	}
+
 };
 
+
+cv::Mutex mutex;
 void onMouseEvent(int event, int x, int y, int flags, void *params){
+
 
 	MouseEventParams& p= *(MouseEventParams*)params;
 
@@ -418,45 +428,75 @@ void onMouseEvent(int event, int x, int y, int flags, void *params){
 		<< "y:" << y << endl
 		<< "flags:" << flags << endl
 		;
-	
+
+	if (event == 1){
+		p.leftDown = true;
+	}
+	else if (event == 4){
+		p.leftDown = false;
+	}
+	else if (event == 2){
+		p.rightDown = true;
+	}
+	else if (event == 5){
+		p.rightDown = false;
+	}
+
+	if (p.working || (!p.leftDown && !p.rightDown)){
+
+		cv::resize(p.result, p.showImage, cv::Size(), p.scale, p.scale);
+		cv::circle(p.showImage, cv::Point(x, y), 3, p.mouseColor, -1);
+		cv::imshow(p.wname, p.showImage);
+		cv::waitKey(33);
+
+		cout << "working:" << p.working << endl
+			<< "leftDown:" << p.leftDown << endl
+			<< "rightDown:" << p.rightDown << endl;
+		cout << "\tskip" << endl;
+		return;
+	}
+
+	cv::AutoLock lock(mutex);
+
 	//event
 	//1 : left down
 	//5 : left up
 	//flags
 	//2 : move
-	if (event == 1){
-		p.leftDown = true;
+
+	if (p.leftDown){
+
+		p.working = true;
+		cout << "\tproc" << endl;
+
+		int realX = x / p.scale;
+		int realY = y / p.scale;
+
+		cout << "selected pos:" << realX << "," << realY << endl;
+		cout << "current image idx" << p.currentImageIdx << endl;
+
+		cv::Mat& labelMat = p.labeledImages[p.currentImageIdx];
+		cv::Mat& src = p.srcImages[p.currentImageIdx];
+		int label = labelMat.at<int>(realY%labelMat.rows, realX%labelMat.cols);
+
+		cout << "selected label " << label << endl;
+
+		cv::Mat mask = labelMat == label;
+		cout << "set label" << endl;
+		p.selectedMap.setTo(p.currentImageIdx * 10000 + label, mask);
+		p.resultFilled.setTo(0, mask);
+		cout << "copy area to result" << endl;
+		src.copyTo(p.result, mask);
 	}
-	else if (event == 5){
-		p.leftDown = false;
+	else if (p.rightDown){
+
 	}
-
-	if (!p.leftDown){
-		return;
-	}
-
-	int realX = x / p.scale;
-	int realY = y / p.scale;
-
-	cout << "selected pos:" << realX << "," << realY << endl;
-
-	cv::Mat& labelMat = p.labeledImages[p.currentImageIdx];
-	cv::Mat& src = p.srcImages[p.currentImageIdx];
-	int label = labelMat.at<int>(realY, realX);
-
-	cout << "selected label " << label << endl;
-
-	cv::Mat mask = labelMat == label;
-	cout << "set label" << endl;
-	p.selectedMap.setTo( p.currentImageIdx * 10000 + label, mask);
-	p.resultFilled.setTo(0, mask);
-	cout << "copy area to result" << endl;
-	src.copyTo(p.result, mask);
-
 
 	cv::resize(p.result, p.showImage, cv::Size(), p.scale, p.scale);
 	cv::imshow(p.wname, p.showImage);
 	cv::waitKey(33);
+
+	p.working = false;
 }
 
 int main(int argc, char** argv){
@@ -465,7 +505,7 @@ int main(int argc, char** argv){
 
 	cout << "start video split" << endl;
 	vector<ImageFileName> fnames;
-	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 3);
+	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 2);
 
 	cout << "start anti shake" << endl;
 	//vector<cv::Mat> dst;
@@ -537,8 +577,12 @@ int main(int argc, char** argv){
 		char ch_key = -1;
 		cv::Mat showImage;
 		while (key != 0x1b){
-			if (params.currentImageIdx < 0) params.currentImageIdx = 0;
-			else if (spxImages.size() <= params.currentImageIdx) params.currentImageIdx = spxImages.size() - 1;
+			if (params.currentImageIdx < 0){
+				params.currentImageIdx = 0;
+			}
+			else if (spxImages.size() <= params.currentImageIdx){
+				params.currentImageIdx = spxImages.size() - 1;
+			}
 
 			cout << "current image idx " << params.currentImageIdx << endl;
 
