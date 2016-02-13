@@ -21,14 +21,14 @@ cv::Scalar randColor(cv::RNG& rng){
 
 }
 
-void antiShake(vector<cv::Mat>& images, cv::Mat& dst){
+void antiShake(const vector<cv::Mat>& images, vector<cv::Mat>& dst){
 
 	cv::Ptr<cv::FeatureDetector> detector = cv::BRISK::create();
 
 	cout << "detect key points" << endl;
 
-	cv::Mat& image0 = images[0];
-	cv::Mat& image1 = images[1];
+	const cv::Mat& image0 = images[0];
+	const cv::Mat& image1 = images[1];
 
 	vector<cv::KeyPoint> keypoints0;
 	detector->detect(image0, keypoints0);
@@ -36,18 +36,19 @@ void antiShake(vector<cv::Mat>& images, cv::Mat& dst){
 	vector<cv::KeyPoint> keypoints1;
 	detector->detect(image1, keypoints1);
 
-	cv::drawKeypoints(image0, keypoints0, dst);
+	cv::Mat resImage;
+	cv::drawKeypoints(image0, keypoints0, resImage);
 
 	if (USE_GUI){
 		cv::Mat show;
-		cv::resize(dst, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+		cv::resize(resImage, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
 		cv::imshow(wname, show);
 		cv::waitKey();
 	}
 	else{
-		cv::imwrite("image_0_draw_keypoint.jpg", dst);
-		cv::drawKeypoints(image1, keypoints1, dst);
-		cv::imwrite("image_1_draw_keypoint.jpg", dst);
+		cv::imwrite("image_0_draw_keypoint.jpg", resImage);
+		cv::drawKeypoints(image1, keypoints1, resImage);
+		cv::imwrite("image_1_draw_keypoint.jpg", resImage);
 	}
 
 
@@ -61,16 +62,16 @@ void antiShake(vector<cv::Mat>& images, cv::Mat& dst){
 	vector<cv::DMatch> matches;
 	matcher.match(desc0, desc1, matches);
 
-	cv::drawMatches(image0, keypoints0, image1, keypoints1, matches, dst);
+	cv::drawMatches(image0, keypoints0, image1, keypoints1, matches, resImage);
 
 	if (USE_GUI){
 		cv::Mat show;
-		cv::resize(dst, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+		cv::resize(resImage, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
 		cv::imshow(wname, show);
 		cv::waitKey();
 	}
 	else{
-		cv::imwrite("match_result.jpg", dst);
+		cv::imwrite("match_result.jpg", resImage);
 	}
 
 	cout << "find fundamental mat" << endl;
@@ -85,67 +86,67 @@ void antiShake(vector<cv::Mat>& images, cv::Mat& dst){
 
 	cv::findFundamentalMat(points0, points1, CV_RANSAC, 3.0, 0.9999999, mask);
 
-	vector<cv::Point2f> dstPoints0;
-	vector<cv::Point2f> dstPoints1;
+	vector<cv::Point2f> resImagePoints0;
+	vector<cv::Point2f> resImagePoints1;
 	for (int i = 0; i < points0.size(); i++){
 		if (mask.at<unsigned char>(0, i)){
-			dstPoints0.push_back(points0[i]);
-			dstPoints1.push_back(points1[i]);
+			resImagePoints0.push_back(points0[i]);
+			resImagePoints1.push_back(points1[i]);
 		}
 	}
 
 	cout << "show find fundamental result" << endl;
 	cv::RNG rng;
-	cv::Mat dst(image0.rows, image0.cols + image1.cols, CV_8UC3);
-	image0.copyTo(cv::Mat(dst, cv::Rect(0, 0, image0.cols, image0.rows)));
-	image1.copyTo(cv::Mat(dst, cv::Rect(image0.cols, 0, image1.cols, image1.rows)));
+	resImage = cv::Mat(image0.rows, image0.cols + image1.cols, CV_8UC3);
+	image0.copyTo(cv::Mat(resImage, cv::Rect(0, 0, image0.cols, image0.rows)));
+	image1.copyTo(cv::Mat(resImage, cv::Rect(image0.cols, 0, image1.cols, image1.rows)));
 
 	if (USE_GUI){
 		cv::Mat show;
-		cv::resize(dst, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+		cv::resize(resImage, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
 		cv::imshow(wname, show);
 		cv::waitKey();
 	}
 	else{
-		cv::imwrite("pair_image.jpg", dst);
+		cv::imwrite("pair_image.jpg", resImage);
 	}
 
-	cout << "dstPoints.size()" << dstPoints0.size() << endl;
+	cout << "resImagePoints.size()" << resImagePoints0.size() << endl;
 
-	for (int i = 0; i < dstPoints0.size(); i++){
-		cv::Point2f &p0 = dstPoints0[i];
-		cv::Point2f &p1 = cv::Point2f(dstPoints1[i].x + image0.cols, dstPoints1[i].y);
-		cv::circle(dst, p0, 2, randColor(rng), -1);
-		cv::circle(dst, p1, 2, randColor(rng), -1);
-		cv::line(dst, p0, p1, randColor(rng));
+	for (int i = 0; i < resImagePoints0.size(); i++){
+		const cv::Point2f &p0 = resImagePoints0[i];
+		const cv::Point2f &p1 = cv::Point2f(resImagePoints1[i].x + image0.cols, resImagePoints1[i].y);
+		cv::circle(resImage, p0, 2, randColor(rng), -1);
+		cv::circle(resImage, p1, 2, randColor(rng), -1);
+		cv::line(resImage, p0, p1, randColor(rng));
 	}
 
 	if (USE_GUI){
 		cv::Mat show;
-		cv::resize(dst, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+		cv::resize(resImage, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
 		cv::imshow(wname, show);
 		cv::waitKey();
 	}
 	else{
-		cv::imwrite("findFundamentalMat_result.jpg", dst);
+		cv::imwrite("findFundamentalMat_result.jpg", resImage);
 	}
 
-	cv::Mat homography = cv::findHomography(dstPoints0, dstPoints1, CV_RANSAC, 1.0);
-	cv::Mat image0dst;
-	cv::warpPerspective(image0, image0dst, homography, image0.size());
+	cv::Mat homography = cv::findHomography(resImagePoints0, resImagePoints1, CV_RANSAC, 1.0);
+	cv::Mat image0resImage;
+	cv::warpPerspective(image0, image0resImage, homography, image0.size());
 
-	dst = image0dst / 2 + image1;
+	resImage = image0resImage / 2 + image1;
 
 	if (USE_GUI){
 		cv::Mat show;
-		cv::resize(dst, show, cv::Size(), 0.5, 0.5);
+		cv::resize(resImage, show, cv::Size(), 0.5, 0.5);
 		cv::imshow(wname, show);
 		cv::waitKey();
 	}
 	else{
-		cv::imwrite("findHomography_result.jpg", dst);
-		dst = image0 / 2 + image1 / 2;
-		cv::imwrite("original.jpg", dst);
+		cv::imwrite("findHomography_result.jpg", resImage);
+		resImage = image0 / 2 + image1 / 2;
+		cv::imwrite("original.jpg", resImage);
 	}
 }
 
@@ -198,7 +199,7 @@ int main(int argc, char** argv){
 		}
 	}
 
-	cv::Mat dst;
+	vector<cv::Mat> dst;
 	antiShake(images, dst);
 
 
