@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <iomanip>
 
 #include <configure.h>
 
@@ -148,6 +149,40 @@ void antiShake(vector<cv::Mat>& images, cv::Mat& dst){
 	}
 }
 
+void videoSplitter(const std::string& fname, const std::string& outputPath = ""){
+
+	cv::VideoCapture cap(fname);
+
+	if (!cap.isOpened()){
+		cerr << "failed to open video>" << fname << endl;
+		return;
+	}
+
+	string path = outputPath;
+	if (path.size() > 0){
+		//path += PATH_SEPARATOR;
+		path += "/";
+	}
+
+	cv::Mat frame;
+	stringstream sstr;
+	int count = 0;
+	while (cap.grab()){
+		cap.retrieve(frame);
+		sstr.str("");
+		sstr << path << "frame_" << setw(5) << setfill('0') << count << ".jpg" << flush;
+		if (USE_GUI){
+			cv::Mat show;
+			cv::resize(frame, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+			cv::imshow(wname, show);
+			cv::waitKey();
+		}
+		else{
+			cv::imwrite(sstr.str(), frame);
+		}
+		count++;
+	}
+}
 
 int main(int argc, char** argv){
 
@@ -165,5 +200,9 @@ int main(int argc, char** argv){
 
 	cv::Mat dst;
 	antiShake(images, dst);
+
+
+	videoSplitter(VIDEO_FILE_PATH);
+
 
 }
