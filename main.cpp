@@ -7,6 +7,8 @@
 
 #include <configure.h>
 
+#include "FrameComposer.h"
+
 using namespace std;
 
 const string wname = "test";
@@ -49,6 +51,7 @@ public:
 		if (image.empty()){
 			cerr << "failed to read image:" << *this << endl;
 		}
+		cout << "read image:" << *this << endl;
 		return image;
 	}
 
@@ -114,6 +117,10 @@ void antiShake(const vector<T>& images, vector<S>& dst){
 		sstr << setw(5) << setfill('0') << 0 << "_" << 0 << "_image_draw_keypoint.jpg" << flush;
 		cv::imwrite(sstr.str(), resImage);
 	}
+
+	//********************
+	//image rect
+	int left(0), right(image0.cols), top(0), bottom(image0.rows);
 
 	for (int j = 1; j < images.size(); j++){
 		int operation_count = 0;
@@ -236,7 +243,53 @@ void antiShake(const vector<T>& images, vector<S>& dst){
 
 		cout << "\timage area transformation use homography" << endl;
 		vector<cv::Point2f> imageRectPointsDst;
-		cv::perspectiveTransform( imageRectPoints, imageRectPointsDst, homography1to0);
+		cv::perspectiveTransform(imageRectPoints, imageRectPointsDst, homography1to0);
+
+		//more internal rect pos
+		// 0 : left top
+		// 1 : left bottom
+		// 2 : right top
+		// 3 : right bottom
+		//left
+		{
+			int tmpLeft = imageRectPointsDst[0].x;
+			if (tmpLeft < imageRectPointsDst[1].x){
+				tmpLeft = imageRectPointsDst[1].x;
+			}
+			if (left < tmpLeft){
+				left = tmpLeft;
+			}
+		}
+		//right
+		{
+			int tmpRight = imageRectPointsDst[2].x;
+			if (tmpRight > imageRectPointsDst[3].x){
+				tmpRight = imageRectPointsDst[3].x;
+			}
+			if (right > tmpRight){
+				right = tmpRight;
+			}
+		}
+		//top
+		{
+			int tmpTop = imageRectPointsDst[0].y;
+			if (tmpTop < imageRectPointsDst[2].y){
+				tmpTop = imageRectPointsDst[2].y;
+			}
+			if (top < tmpTop){
+				top = tmpTop;
+			}
+		}
+		//bottom
+		{
+			int tmpBottom = imageRectPointsDst[1].y;
+			if (tmpBottom > imageRectPointsDst[3].y){
+				tmpBottom = imageRectPointsDst[3].y;
+			}
+			if (bottom > tmpBottom){
+				bottom = tmpBottom;
+			}
+		}
 
 		cout << "\tdraw result" << endl;
 		resImage = image1resImage / 2 + image0;
@@ -259,10 +312,22 @@ void antiShake(const vector<T>& images, vector<S>& dst){
 		}
 		dst.push_back(image1resImage);
 	}
+
+	cout << "crop result images" << endl;
+	cv::Rect internalRect(left,top, right - left, bottom - top);
+	cout << internalRect << endl;
+	stringstream sstr;
+	for (int i = 0; i < dst.size(); i++){
+		sstr.str("");
+		sstr << "anti_shake_result_" << setw(5) << setfill('0') << i << ".jpg" << flush;
+		string fname = sstr.str();
+		cout << "\t" << fname << endl;
+		cv::imwrite(fname, cv::Mat(dst[i], internalRect));
+	}
 }
 
 template<typename T>
-void videoSplitter(const std::string& fname, vector<T>& dst, const std::string& outputPath = ""){
+void videoSplitter(const std::string& fname, vector<T>& dst, const int interval=1, const int numOfImages=-1, const std::string& outputPath = ""){
 
 	cv::VideoCapture cap(fname);
 
@@ -280,23 +345,33 @@ void videoSplitter(const std::string& fname, vector<T>& dst, const std::string& 
 
 	cv::Mat frame;
 	stringstream sstr;
-	int count = 0;
+	int output_counter = 0;
+	int interval_counter = 0;
 	while (cap.grab()){
+		if (numOfImages != -1 && output_counter >= numOfImages){
+			return;
+		}
+
+		interval_counter++;
+		if (interval > interval_counter){
+			continue;
+		}
+		interval_counter = 0;
+
 		cap.retrieve(frame);
-		sstr.str("");
-		sstr << path << "frame_" << setw(5) << setfill('0') << count << ".jpg" << flush;
 		if (USE_GUI){
 			cv::Mat show;
 			cv::resize(frame, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
 			cv::imshow(wname, show);
 			cv::waitKey();
 		}
-		else{
-			string fname = sstr.str();
-			cv::imwrite(fname, frame);
-			dst.push_back(fname);
-		}
-		count++;
+		sstr.str("");
+		sstr << path << "frame_" << setw(5) << setfill('0') << output_counter << ".jpg" << flush;
+		string fname = sstr.str();
+		cout << "save frame as " << fname << endl;
+		cv::imwrite(fname, frame);
+		dst.push_back(fname);
+		output_counter++;
 	}
 }
 
@@ -304,31 +379,7 @@ int main(int argc, char** argv){
 
 	cout << "start video split" << endl;
 	vector<ImageFileName> fnames;
-	videoSplitter(VIDEO_FILE_PATH, fnames);
-
-	cout << "filtere use images" << endl;
-	vector<ImageFileName> smallFnames;
-	int interval = fnames.size() / 10;
-	for (int i = 0; i < fnames.size(); i += interval){
-		smallFnames.push_back(fnames[i]);
-	}
-
-
-	/*
-	cout << "filtere use images" << endl;
-	vector<cv::Mat> images;
-	int interval = fnames.size() / 10;
-	for (int i = 0; i < fnames.size(); i += interval){
-		images.push_back(cv::imread(fnames[i]));
-	}
-
-	for (int i = 0; i < images.size(); i++){
-		if (images[i].empty()){
-			cerr << "empty image:" << i << endl;
-			return 1;
-		}
-	}
-	*/
+	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 10);
 
 	cout << "start anti shake" << endl;
 	//vector<cv::Mat> dst;
@@ -336,6 +387,15 @@ int main(int argc, char** argv){
 	//antiShake<ImageFileName, cv::Mat>(fnames, dst);
 
 	vector<ImageFileName> dst;
-	antiShake<ImageFileName, ImageFileName>(smallFnames, dst);
+	antiShake<ImageFileName, ImageFileName>(fnames, dst);
 
+	FrameComposer fcomp;
+	vector<string> resultDst;
+	for (int i = 0; i < dst.size(); i++){
+		resultDst.push_back(dst[i]);
+	}
+	fcomp.setFile(resultDst);
+	cv::Mat res = fcomp.exec();
+
+	cv::imwrite("result_erase_move_object.jpg", res);
 }
