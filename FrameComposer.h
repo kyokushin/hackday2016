@@ -1,6 +1,7 @@
 
 #include <vector>
 #include <string>
+#include <iostream>
 #include <opencv2/opencv.hpp>
 
 struct FrameComposer{
@@ -74,25 +75,15 @@ struct FrameComposer{
 				}
 			}
 		}
-		// �Y�����錳�摜�����f�l���擾����
-		cv::Mat result = cv::Mat::zeros(temp.rows, temp.cols, CV_8UC3);
-		for (int i = 0; i < m_nImgs; ++i) {
-			cv::Mat img = cv::imread(m_filenames[i]);
-			//cv::Mat img = images[i];
-			for (int j = 0; j < pixels; ++j) {
-    			int x = j % img_cols;
-			    int y = j / img_cols;
-		    	//int idx = (int)dst.at<unsigned char>(y, x);
-			    int idx = (int)dst.ptr(y)[x];
-			    if (i == idx){
-				    //result.at<cv::Vec3b>(y, x) = img.at<cv::Vec3b>(y, x);
-				    unsigned char *resultPix = result.data + y * 3 * result.cols + 3 * x;
-				    unsigned char *imgPix = img.data + y * 3 * img.cols + 3 * x;
 
-				    resultPix[0] = imgPix[0];
-				    resultPix[1] = imgPix[1];
-				    resultPix[2] = imgPix[2];
-			    }
+		// �Y�����錳�摜�����f�l���擾����
+		cv::Mat result = cv::Mat::zeros(temp.rows, temp.cols, CV_8UC1);
+		for (int i = 0; i < result.rows; ++i) {
+			unsigned char *line_idx = dst.ptr(i);
+			unsigned char *line_res = result.ptr(i);
+			for (int j = 0; j < result.cols; ++j) {
+		    	//int idx = (int)dst.at<unsigned char>(y, x);
+			    line_res[j] = line_idx[j];
 			}
 		}
 

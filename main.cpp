@@ -14,7 +14,117 @@ using namespace std;
 
 const string wname = "test";
 const bool USE_GUI = false;
-const double IMAGE_SCALE = 0.1;
+const double IMAGE_SCALE = 1.0;
+
+int max(const cv::Mat& mat){
+
+	int max = 0;
+	for (int i = 0; i < mat.rows; i++){
+		const int *line = mat.ptr<int>(i);
+		for (int j = 0; j < mat.cols; j++){
+			if (max < line[j]){
+				max = line[j];
+			}
+		}
+	}
+
+	return max;
+}
+
+void ohd3PlusOhd4(const cv::Mat& frameCompRes,
+	const vector<cv::Mat>& labelImages,
+	const vector<cv::Mat>& srcImages,
+	cv::Mat& dst){
+
+	if (dst.size() != labelImages[0].size() || dst.type() != srcImages[0].type()){
+		cout << "initialize dst" << endl;
+		dst = cv::Mat::zeros(srcImages[0].rows, srcImages[0].cols, srcImages[0].type());
+	}
+
+	cv::Mat dstFilled = cv::Mat(dst.rows, dst.cols, CV_8UC1);
+	dstFilled.setTo(255);
+	for (int i = 0; i < labelImages.size(); i++){
+		cout << "label " << i << endl;
+ 		const cv::Mat& label = labelImages[i];
+
+		cout << "find max index" << flush;
+		const int maxIdx = max(label);
+		cout << maxIdx << endl;
+
+		cout << "init counter" << endl;
+		vector<vector<int>> countsPerLabel;
+		for (int j = 0; j <= maxIdx; j++){
+
+			vector<int> tmp;
+			for (int k = 0; k < labelImages.size(); k++){
+				tmp.push_back(0);
+			}
+			countsPerLabel.push_back(tmp);
+		}
+		cout << "count image index in super pix" << endl;
+		for (int j = 0; j < label.rows; j++){
+			const int* line_label = label.ptr<int>(j);
+			const unsigned char* line_fcmp = frameCompRes.ptr(j);
+
+			for (int k = 0; k < label.cols; k++){
+				int val_label = line_label[k];
+				unsigned char val_fcmp = line_fcmp[k];
+
+				countsPerLabel[val_label][val_fcmp]++;
+			}
+		}
+
+		cout << "create label 2 image map" << endl;
+		vector<int> label2image;
+		for (int j = 0; j < countsPerLabel.size(); j++){
+			vector<int>& counts = countsPerLabel[j];
+			int maxCount = 0;
+			int maxIdx = 0;
+			for (int k = 0; k < counts.size(); k++){
+				if (maxCount < counts[k]){
+					maxCount = counts[k];
+					maxIdx = k;
+				}
+			}
+			label2image.push_back(maxIdx);
+		}
+
+		for (int j = 0; j < label2image.size(); j++){
+			cout << "label " << j << "->image " << label2image[j] << endl;
+		}
+
+		cout << "apply result" << endl;
+		cv::imshow(wname, dst);
+		cv::waitKey();
+		for (int j = 0; j < label.rows; j++){
+			//cout << "line " << j << endl;
+			const int* line_label = label.ptr<int>(j);
+			unsigned char* line_dst = dst.ptr(j);
+			unsigned char* line_filled = dstFilled.ptr(j);
+
+			for (int k = 0; k < label.cols; k++){
+				//cout << "\tpx " << k << endl;
+				int val_label = line_label[k];
+				//cout << "\t\tlabel " << (int)val_label << endl;
+				int useImageIdx = label2image[val_label];
+				if (useImageIdx != i) continue;
+				//cout << "\t\timage idx " << useImageIdx << endl;
+
+				const cv::Mat& src = srcImages[useImageIdx];
+				const unsigned char* px_src = src.ptr(j) + 3 * k;
+				unsigned char* px_dst = line_dst + 3 * k;
+				px_dst[0] = px_src[0];
+				px_dst[1] = px_src[1];
+				px_dst[2] = px_src[2];
+				*line_filled = 0;
+			}
+		}
+		cv::imshow(wname, dst);
+		cv::waitKey();
+
+	}
+
+}
 
 class ImageFileName : public std::string {
 
@@ -308,6 +418,7 @@ void antiShake(const vector<T>& images, vector<S>& dst){
 			cv::imwrite(sstr.str(), resImage);
 
 			resImage = image0 / 2 + image1 / 2;
+			sstr.str("");
 			sstr <<  setw(5) << setfill('0') << j << operation_count++ <<  "_findHomography_original.jpg" << flush;
 			cv::imwrite(sstr.str(), resImage);
 
@@ -376,13 +487,12 @@ void videoSplitter(const std::string& fname, vector<T>& dst, const int interval=
 	}
 }
 
-const bool USE_OHD3 = false;
 
 struct MouseEventParams{
 	vector<cv::Mat> srcImages;//antiShaking and crop internal area
 	vector<cv::Mat> labeledImages;
 
-	double scale = 0.5;
+	double scale = 1.0;
 	cv::Mat selectedMap;
 	int currentImageIdx = 0;
 	cv::Mat result;
@@ -499,13 +609,15 @@ void onMouseEvent(int event, int x, int y, int flags, void *params){
 	p.working = false;
 }
 
+const bool USE_OHD3 = true;
+
 int main(int argc, char** argv){
 
 	cv::namedWindow(wname);
 
 	cout << "start video split" << endl;
 	vector<ImageFileName> fnames;
-	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 2);
+	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 30);
 
 	cout << "start anti shake" << endl;
 	//vector<cv::Mat> dst;
@@ -516,15 +628,48 @@ int main(int argc, char** argv){
 	antiShake<ImageFileName, ImageFileName>(fnames, dst);
 
 	if(USE_OHD3){
-		FrameComposer fcomp;
-		vector<string> resultDst;
-		for (int i = 0; i < dst.size(); i++){
-			resultDst.push_back(dst[i]);
-		}
-		fcomp.setFile(resultDst);
-		cv::Mat res = fcomp.exec();
 
-		cv::imwrite("result_erase_move_object.jpg", res);
+		//OHD4 algorithm
+		cout<< "exec super pix" <<endl;
+		int regionSize = 50;
+		vector<cv::Mat> resizeDst;
+		for(int i=0; i<dst.size(); i++){
+			cv::Mat image = dst[i];
+			cv::Mat resized;
+			cv::resize(image, resized, cv::Size(image.cols/regionSize * regionSize, image.rows/regionSize * regionSize));
+			resizeDst.push_back(resized);
+			cout<< "\t" << i << ":" << resized.size() <<endl;
+		}
+
+		cout << "start super pixel" << endl;
+		Slic spx(regionSize);
+		vector<cv::Mat> labelImages;
+		vector<cv::Mat> contourImages;
+		spx.calcSuperPixel(resizeDst, labelImages, contourImages, 10.0f, 10, 10);
+
+		cout << "ohd3 algorithm" << endl;
+		//OHD3 algorithm
+		FrameComposer fcomp;
+		vector<string> resizeDst_str;
+		for (int i = 0; i < resizeDst.size(); i++){
+			stringstream sstr;
+			sstr << "spx_result_" << setw(4) << setfill('0') << i << ".jpg" << flush;
+			string fname = sstr.str();
+			cout << "save:" << fname << endl;
+			cv::imwrite( fname, resizeDst[i]);
+
+			resizeDst_str.push_back(fname);
+		}
+		fcomp.setFile(resizeDst_str);
+		cv::Mat fcompRes = fcomp.exec();
+
+
+		cout << "start combined algorithm" << endl;
+		cv::Mat dst;
+		ohd3PlusOhd4(fcompRes, labelImages, resizeDst, dst);
+		
+		cv::imwrite("resulg_ohd3_ohd4.jpg", dst);
+
 	}
 	else {
 
@@ -570,7 +715,7 @@ int main(int argc, char** argv){
 
 		params.currentImageIdx = 0;
 		params.init(resizeDst, labelImages);
-		params.scale = 0.5;
+		params.scale = IMAGE_SCALE;
 
 		cout << "start selecting ui" << endl;
 		int key = -1;
