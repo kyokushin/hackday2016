@@ -390,6 +390,8 @@ struct MouseEventParams{
 	cv::Mat showImage;
 	const string wname = "result";
 
+	bool leftDown = false;
+
 	void init(vector<cv::Mat>& srcImages, vector<cv::Mat>& labeledImages){
 		if (labeledImages.size() == 0){
 			cerr << "labeled images is 0" << endl;
@@ -409,16 +411,29 @@ struct MouseEventParams{
 
 void onMouseEvent(int event, int x, int y, int flags, void *params){
 
+	MouseEventParams& p= *(MouseEventParams*)params;
+
 	cout << "event:" << event << endl
 		<< "x:" << x << endl
 		<< "y:" << y << endl
 		<< "flags:" << flags << endl
 		;
-
 	
-	if (event != 1) return;
+	//event
+	//1 : left down
+	//5 : left up
+	//flags
+	//2 : move
+	if (event == 1){
+		p.leftDown = true;
+	}
+	else if (event == 5){
+		p.leftDown = false;
+	}
 
-	MouseEventParams& p= *(MouseEventParams*)params;
+	if (!p.leftDown){
+		return;
+	}
 
 	int realX = x / p.scale;
 	int realY = y / p.scale;
@@ -441,8 +456,7 @@ void onMouseEvent(int event, int x, int y, int flags, void *params){
 
 	cv::resize(p.result, p.showImage, cv::Size(), p.scale, p.scale);
 	cv::imshow(p.wname, p.showImage);
-	cv::waitKey(1);
-	
+	cv::waitKey(33);
 }
 
 int main(int argc, char** argv){
@@ -475,8 +489,7 @@ int main(int argc, char** argv){
 	else {
 
 		cout<< "exec super pix" <<endl;
-		int regionSize = 200;
-
+		int regionSize = 50;
 		vector<cv::Mat> resizeDst;
 		for(int i=0; i<dst.size(); i++){
 			cv::Mat image = dst[i];
@@ -490,7 +503,7 @@ int main(int argc, char** argv){
 		
 		vector<cv::Mat> labelImages;
 		vector<cv::Mat> contourImages;
-		spx.calcSuperPixel(resizeDst, labelImages, contourImages, 20.0f, 100, 25);
+		spx.calcSuperPixel(resizeDst, labelImages, contourImages, 10.0f, 10, 10);
 
 		cout<< "output super pix result" <<endl;
 		stringstream sstr;
