@@ -378,11 +378,26 @@ void videoSplitter(const std::string& fname, vector<T>& dst, const int interval=
 
 const bool USE_OHD3 = false;
 
+struct MouseEventParams{
+	vector<cv::Mat> labeledImages;
+	cv::Mat dst;
+	double scale = 0.5;
+};
+
+void onMouseEvent(int event, int x, int y, int flags, void *params){
+
+	MouseEventParams& p= *(MouseEventParams*)params;
+
+	int realX = x / p.scale;
+	int realY = y / p.scale;
+
+}
+
 int main(int argc, char** argv){
 
 	cout << "start video split" << endl;
 	vector<ImageFileName> fnames;
-	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 5);
+	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 2);
 
 	cout << "start anti shake" << endl;
 	//vector<cv::Mat> dst;
@@ -413,7 +428,6 @@ int main(int argc, char** argv){
 			cv::Mat image = dst[i];
 			cv::Mat resized;
 			cv::resize(image, resized, cv::Size(image.cols/regionSize * regionSize, image.rows/regionSize * regionSize));
-			cv::cvtColor(resized, resized, CV_BGR2GRAY);
 			resizeDst.push_back(resized);
 			cout<< "\t" << i << ":" << resized.size() <<endl;
 		}
@@ -434,7 +448,40 @@ int main(int argc, char** argv){
 			cv::imwrite(fname, contourImages[i]);
 		}
 
+		cout << "draw spx result" << endl;
+		vector<cv::Mat> spxImages;
+		cv::Mat white = resizeDst[0].clone();
+		for (int i = 0; i < contourImages.size(); i++){
+			cout << "\tdraw contour" << endl;
+			cv::Mat image = resizeDst[i].clone();
+			image.setTo( cv::Scalar(0,0,255), contourImages[i]);
+			spxImages.push_back(image);
+		}
+
+
+		cout << "start selecting ui" << endl;
+		int key = -1;
+		int currentImageIdx = 0;
+		double showScale = 0.5;
+		cv::Mat showImage;
+		while (key != 0x1b){
+
+			if (currentImageIdx < 0) currentImageIdx = 0;
+			else if (spxImages.size() <= currentImageIdx) currentImageIdx = spxImages.size() - 1;
+
+			cout << "current image idx " << currentImageIdx << endl;
+
+			cv::resize(spxImages[currentImageIdx], showImage, cv::Size(), showScale, showScale);
+			cv::imshow(wname, showImage);
+			key = cv::waitKey();
+
+			currentImageIdx++;
+		}
+
 	}
+
+
+
 
 	cout<< "end program" <<endl;
 
