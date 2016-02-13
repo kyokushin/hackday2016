@@ -4,17 +4,32 @@
 #include <string>
 #include <vector>
 #include <iomanip>
+#include <fstream>
 
 #include <configure.h>
 
 #include "FrameComposer.h"
+#include "FrameComposer_orig.h"
 #include "superpixel.h"
 
 using namespace std;
 
 const string wname = "test";
+const bool use_video = true;
+
 const bool USE_GUI = false;
-const double IMAGE_SCALE = 1.0;
+const double IMAGE_SCALE = 0.5;
+
+const bool USE_OHD3PLUS4 = false;
+const bool USE_OHD3 = false;
+
+const int SPX_REGION_SIZE = 10;
+const int SPX_MIN_SIZE = 10;
+
+
+const double SOURCE_IMAGE_SCALE = 1.0;
+const int VIDEO_INTERVAL = 60;
+const int VIDEO_OUTPUT_FRAME_NUM = 20;
 
 int max(const cv::Mat& mat){
 
@@ -89,13 +104,13 @@ void ohd3PlusOhd4(const cv::Mat& frameCompRes,
 			label2image.push_back(maxIdx);
 		}
 
+		/*
 		for (int j = 0; j < label2image.size(); j++){
 			cout << "label " << j << "->image " << label2image[j] << endl;
 		}
+		*/
 
 		cout << "apply result" << endl;
-		cv::imshow(wname, dst);
-		cv::waitKey();
 		for (int j = 0; j < label.rows; j++){
 			//cout << "line " << j << endl;
 			const int* line_label = label.ptr<int>(j);
@@ -116,6 +131,89 @@ void ohd3PlusOhd4(const cv::Mat& frameCompRes,
 				px_dst[0] = px_src[0];
 				px_dst[1] = px_src[1];
 				px_dst[2] = px_src[2];
+				line_filled[k] = 0;
+			}
+		}
+	}
+	cv::imshow(wname, dst);
+	cv::waitKey();
+
+	cv::imshow(wname, dstFilled);
+	cv::waitKey();
+	
+
+	{//remain area
+		cv::Mat filledLabel;
+		cv::connectedComponents(dstFilled, filledLabel, 4, CV_32S);
+		cout << "find max index" << flush;
+		const int maxIdx = max(filledLabel);
+		cout << maxIdx << endl;
+
+		cout << "init counter" << endl;
+		vector<vector<int>> countsPerLabel;
+		for (int j = 0; j < maxIdx; j++){
+
+			vector<int> tmp;
+			for (int k = 0; k < labelImages.size(); k++){
+				tmp.push_back(0);
+			}
+			countsPerLabel.push_back(tmp);
+		}
+		cout << "count image index in super pix" << endl;
+		for (int j = 0; j < filledLabel.rows; j++){
+			const int* line_label = filledLabel.ptr<int>(j);
+			const unsigned char* line_fcmp = frameCompRes.ptr(j);
+
+			for (int k = 0; k < filledLabel.cols; k++){
+				int val_label = line_label[k];
+				unsigned char val_fcmp = line_fcmp[k];
+				if (val_label == 0) continue;
+
+				countsPerLabel[val_label-1][val_fcmp]++;
+			}
+		}
+		cout << "create label 2 image map" << endl;
+		vector<int> label2image;
+		for (int j = 0; j < countsPerLabel.size(); j++){
+			vector<int>& counts = countsPerLabel[j];
+			int maxCount = 0;
+			int maxIdx = 0;
+			for (int k = 0; k < counts.size(); k++){
+				if (maxCount < counts[k]){
+					maxCount = counts[k];
+					maxIdx = k;
+				}
+			}
+			label2image.push_back(maxIdx);
+		}
+
+		/*
+		for (int j = 0; j < label2image.size(); j++){
+			cout << "label " << j << "->image " << label2image[j] << endl;
+		}
+		*/
+
+		cout << "apply result" << endl;
+		for (int j = 0; j < filledLabel.rows; j++){
+			//cout << "line " << j << endl;
+			const int* line_label = filledLabel.ptr<int>(j);
+			unsigned char* line_dst = dst.ptr(j);
+			unsigned char* line_filled = dstFilled.ptr(j);
+
+			for (int k = 0; k < filledLabel.cols; k++){
+				//cout << "\tpx " << k << endl;
+				int val_label = line_label[k];
+				if (val_label == 0) continue;
+				//cout << "\t\tlabel " << (int)val_label << endl;
+				int useImageIdx = label2image[val_label-1];
+				//cout << "\t\timage idx " << useImageIdx << endl;
+
+				const cv::Mat& src = srcImages[useImageIdx];
+				const unsigned char* px_src = src.ptr(j) + 3 * k;
+				unsigned char* px_dst = line_dst + 3 * k;
+				px_dst[0] = px_src[0];
+				px_dst[1] = px_src[1];
+				px_dst[2] = px_src[2];
 				*line_filled = 0;
 			}
 		}
@@ -123,7 +221,6 @@ void ohd3PlusOhd4(const cv::Mat& frameCompRes,
 		cv::waitKey();
 
 	}
-
 }
 
 class ImageFileName : public std::string {
@@ -439,7 +536,9 @@ void antiShake(const vector<T>& images, vector<S>& dst){
 }
 
 template<typename T>
-void videoSplitter(const std::string& fname, vector<T>& dst, const int interval=1, const int numOfImages=-1, const std::string& outputPath = ""){
+void videoSplitter(const std::string& fname,
+	vector<T>& dst, const int interval=1,
+	const int numOfImages=-1, const double scale = 1.0, const std::string& outputPath = ""){
 
 	cv::VideoCapture cap(fname);
 
@@ -481,7 +580,14 @@ void videoSplitter(const std::string& fname, vector<T>& dst, const int interval=
 		sstr << path << "frame_" << setw(5) << setfill('0') << output_counter << ".jpg" << flush;
 		string fname = sstr.str();
 		cout << "save frame as " << fname << endl;
-		cv::imwrite(fname, frame);
+		if (scale != 1.0){
+			cv::Mat small;
+			cv::resize(frame, small, cv::Size(), scale, scale);
+			cv::imwrite(fname, small);
+		}
+		else {
+			cv::imwrite(fname, frame);
+		}
 		dst.push_back(fname);
 		output_counter++;
 	}
@@ -609,29 +715,38 @@ void onMouseEvent(int event, int x, int y, int flags, void *params){
 	p.working = false;
 }
 
-const bool USE_OHD3 = true;
 
 int main(int argc, char** argv){
 
 	cv::namedWindow(wname);
 
-	cout << "start video split" << endl;
-	vector<ImageFileName> fnames;
-	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 30);
-
-	cout << "start anti shake" << endl;
-	//vector<cv::Mat> dst;
-	//antiShake<cv::Mat>(images, dst);
-	//antiShake<ImageFileName, cv::Mat>(fnames, dst);
-
 	vector<ImageFileName> dst;
-	antiShake<ImageFileName, ImageFileName>(fnames, dst);
+	if (use_video){
+		cout << "start video split" << endl;
+		vector<ImageFileName> fnames;
+		videoSplitter(VIDEO_FILE_PATH, fnames, VIDEO_INTERVAL, VIDEO_OUTPUT_FRAME_NUM, SOURCE_IMAGE_SCALE);
 
-	if(USE_OHD3){
+		cout << "start anti shake" << endl;
+		//vector<cv::Mat> dst;
+		//antiShake<cv::Mat>(images, dst);
+		//antiShake<ImageFileName, cv::Mat>(fnames, dst);
+
+		antiShake<ImageFileName, ImageFileName>(fnames, dst);
+	}
+	else {
+		ifstream ifs(IMAGES_LIST.c_str());
+		string line;
+		while (ifs>> line){
+			dst.push_back(IMAGES_DIR + line);
+		}
+		
+	}
+
+	if(USE_OHD3PLUS4){
 
 		//OHD4 algorithm
 		cout<< "exec super pix" <<endl;
-		int regionSize = 50;
+		int regionSize = SPX_REGION_SIZE;
 		vector<cv::Mat> resizeDst;
 		for(int i=0; i<dst.size(); i++){
 			cv::Mat image = dst[i];
@@ -645,7 +760,16 @@ int main(int argc, char** argv){
 		Slic spx(regionSize);
 		vector<cv::Mat> labelImages;
 		vector<cv::Mat> contourImages;
-		spx.calcSuperPixel(resizeDst, labelImages, contourImages, 10.0f, 10, 10);
+		spx.calcSuperPixel(resizeDst, labelImages, contourImages, 10.0f, 10, SPX_MIN_SIZE);
+
+		for (int i = 0; i < contourImages.size(); i++){
+			cout << "\tdraw contour" << endl;
+			cv::Mat image = resizeDst[i].clone();
+			image.setTo( cv::Scalar(0,0,255), contourImages[i]);
+			cv::resize(image, image, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+			cv::imshow(wname, image);
+			cv::waitKey();
+		}
 
 		cout << "ohd3 algorithm" << endl;
 		//OHD3 algorithm
@@ -669,6 +793,18 @@ int main(int argc, char** argv){
 		ohd3PlusOhd4(fcompRes, labelImages, resizeDst, dst);
 		
 		cv::imwrite("resulg_ohd3_ohd4.jpg", dst);
+
+	}
+	else if (USE_OHD3){
+		FrameComposerOrig fcomp;
+		vector<string> resultDst;
+		for (int i = 0; i < dst.size(); i++){
+			resultDst.push_back(dst[i]);
+		}
+		fcomp.setFile(resultDst);
+		cv::Mat res = fcomp.exec();
+
+		cv::imwrite("result_erase_move_object.jpg", res);
 
 	}
 	else {
@@ -707,6 +843,9 @@ int main(int argc, char** argv){
 			cout << "\tdraw contour" << endl;
 			cv::Mat image = resizeDst[i].clone();
 			image.setTo( cv::Scalar(0,0,255), contourImages[i]);
+			sstr.str("");
+			sstr << "draw_spx_contour_" << i << ".jpg" << flush;
+			cv::imwrite(sstr.str(), image);
 			spxImages.push_back(image);
 		}
 
