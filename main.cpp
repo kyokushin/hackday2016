@@ -379,25 +379,79 @@ void videoSplitter(const std::string& fname, vector<T>& dst, const int interval=
 const bool USE_OHD3 = false;
 
 struct MouseEventParams{
+	vector<cv::Mat> srcImages;//antiShaking and crop internal area
 	vector<cv::Mat> labeledImages;
-	cv::Mat dst;
+
 	double scale = 0.5;
+	cv::Mat selectedMap;
+	int currentImageIdx = 0;
+	cv::Mat result;
+	cv::Mat resultFilled;
+	cv::Mat showImage;
+	const string wname = "result";
+
+	void init(vector<cv::Mat>& srcImages, vector<cv::Mat>& labeledImages){
+		if (labeledImages.size() == 0){
+			cerr << "labeled images is 0" << endl;
+			return;
+		}
+
+		this->srcImages = srcImages;
+		this->labeledImages = labeledImages;
+
+		cv::Mat& image = labeledImages[0];
+		selectedMap = cv::Mat(image.rows, image.cols, CV_32SC1);
+		result = cv::Mat::zeros(image.rows, image.cols, CV_8UC3);
+		resultFilled = cv::Mat(image.rows, image.cols, CV_8UC1);
+		resultFilled.setTo(255);
+	}
 };
 
 void onMouseEvent(int event, int x, int y, int flags, void *params){
+
+	cout << "event:" << event << endl
+		<< "x:" << x << endl
+		<< "y:" << y << endl
+		<< "flags:" << flags << endl
+		;
+
+	
+	if (event != 1) return;
 
 	MouseEventParams& p= *(MouseEventParams*)params;
 
 	int realX = x / p.scale;
 	int realY = y / p.scale;
 
+	cout << "selected pos:" << realX << "," << realY << endl;
+
+	cv::Mat& labelMat = p.labeledImages[p.currentImageIdx];
+	cv::Mat& src = p.srcImages[p.currentImageIdx];
+	int label = labelMat.at<int>(realY, realX);
+
+	cout << "selected label " << label << endl;
+
+	cv::Mat mask = labelMat == label;
+	cout << "set label" << endl;
+	p.selectedMap.setTo( p.currentImageIdx * 10000 + label, mask);
+	p.resultFilled.setTo(0, mask);
+	cout << "copy area to result" << endl;
+	src.copyTo(p.result, mask);
+
+
+	cv::resize(p.result, p.showImage, cv::Size(), p.scale, p.scale);
+	cv::imshow(p.wname, p.showImage);
+	cv::waitKey(1);
+	
 }
 
 int main(int argc, char** argv){
 
+	cv::namedWindow(wname);
+
 	cout << "start video split" << endl;
 	vector<ImageFileName> fnames;
-	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 2);
+	videoSplitter(VIDEO_FILE_PATH, fnames, 30, 3);
 
 	cout << "start anti shake" << endl;
 	//vector<cv::Mat> dst;
@@ -458,24 +512,51 @@ int main(int argc, char** argv){
 			spxImages.push_back(image);
 		}
 
+		MouseEventParams params;
+		cv::setMouseCallback(wname, onMouseEvent, &params);
+
+		params.currentImageIdx = 0;
+		params.init(resizeDst, labelImages);
+		params.scale = 0.5;
 
 		cout << "start selecting ui" << endl;
 		int key = -1;
-		int currentImageIdx = 0;
-		double showScale = 0.5;
+		char ch_key = -1;
 		cv::Mat showImage;
 		while (key != 0x1b){
+			if (params.currentImageIdx < 0) params.currentImageIdx = 0;
+			else if (spxImages.size() <= params.currentImageIdx) params.currentImageIdx = spxImages.size() - 1;
 
-			if (currentImageIdx < 0) currentImageIdx = 0;
-			else if (spxImages.size() <= currentImageIdx) currentImageIdx = spxImages.size() - 1;
+			cout << "current image idx " << params.currentImageIdx << endl;
 
-			cout << "current image idx " << currentImageIdx << endl;
-
-			cv::resize(spxImages[currentImageIdx], showImage, cv::Size(), showScale, showScale);
+			cv::resize(spxImages[params.currentImageIdx], showImage, cv::Size(), params.scale, params.scale);
 			cv::imshow(wname, showImage);
 			key = cv::waitKey();
+			ch_key = (char)key;
 
-			currentImageIdx++;
+			cout << "key:" << key << endl;
+
+			if (key == 2555904){
+				params.currentImageIdx++;
+			}
+			else if (key == 2424832){
+				params.currentImageIdx--;
+			}
+			else if (ch_key == 'i'){
+				cout << "show result" << endl;
+				cv::imshow(params.wname, params.result);
+				cv::waitKey();
+				cout << "show filled" << endl;
+				cv::imshow(params.wname, params.resultFilled);
+				cv::waitKey();
+
+				cout << "proc inpaint" << endl;
+				cv::Mat result;
+				cv::inpaint(params.result, params.resultFilled, result, 10, CV_INPAINT_NS);
+				cv::imshow(params.wname, result);
+				cv::waitKey();
+				cv::imwrite("inpainting_result.jpg", result);
+			}
 		}
 
 	}
