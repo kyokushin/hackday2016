@@ -15,11 +15,30 @@ const double IMAGE_SCALE = 0.1;
 
 class ImageFileName : public std::string {
 
+private:
+	static int save_counter;
+	static const std::string EXT;
+	static const std::string PREFIX;
+	int savedId;
+	
+	static void saveTmpFile(ImageFileName& fname, const cv::Mat& image){
+		stringstream sstr;
+		sstr << PREFIX << setw(8) << setfill('0') << save_counter++ << EXT << flush;
+		fname = sstr.str();
+		cout << "save file name:" << fname << endl;
+		if (!cv::imwrite(fname, image)){
+			cerr << "failed to save image:" << fname << endl;
+		}
+	}
+
 public:
 	ImageFileName() : std::string(){
 	}
 	ImageFileName(const ImageFileName& ifn){
 		*this = ifn;
+	}
+	ImageFileName(const cv::Mat& image){
+		saveTmpFile(*this, image);
 	}
 
 	ImageFileName(const std::string& str): std::string(str){
@@ -36,7 +55,16 @@ public:
 	void operator=(std::string str){
 		std::string::operator=(str);
 	}
+
+
+	void operator=(const cv::Mat& image){
+		saveTmpFile(*this, image);
+	}
 };
+
+int ImageFileName::save_counter = 0;
+const std::string ImageFileName::EXT = ".jpg";
+const std::string ImageFileName::PREFIX = "_ImageFileName";
 
 cv::Scalar randColor(cv::RNG& rng){
 
@@ -45,8 +73,8 @@ cv::Scalar randColor(cv::RNG& rng){
 	return cv::Scalar(color & 0xff, color >> 8 & 0xff, color >> 16 & 0xff);
 }
 
-template<typename T>
-void antiShake(const vector<T>& images, vector<cv::Mat>& dst){
+template<typename T, typename S>
+void antiShake(const vector<T>& images, vector<S>& dst){
 
 	cv::Ptr<cv::FeatureDetector> detector;
 	//detector = cv::BRISK::create();
@@ -123,10 +151,10 @@ void antiShake(const vector<T>& images, vector<cv::Mat>& dst){
 		cout << "\tblout fource match" << endl;
 		cv::BFMatcher matcher;
 		vector<cv::DMatch> matches;
-		matcher.match(desc0, desc1, matches);
+		matcher.match(desc1, desc0, matches);
 
 		cout << "\tdraw matches" << endl;
-		cv::drawMatches(image0, keypoints0, image1, keypoints1, matches, resImage);
+		cv::drawMatches(image1, keypoints1, image0, keypoints0, matches, resImage);
 
 		if (USE_GUI){
 			cv::Mat show;
@@ -136,7 +164,7 @@ void antiShake(const vector<T>& images, vector<cv::Mat>& dst){
 		}
 		else{
 			stringstream sstr;
-			sstr << setw(5) << setfill('0') << j << "_" << operation_count << "_match_result.jpg" << flush;
+			sstr << setw(5) << setfill('0') << j << "_" << operation_count++ << "_match_result.jpg" << flush;
 			cv::imwrite(sstr.str(), resImage);
 		}
 
@@ -146,8 +174,8 @@ void antiShake(const vector<T>& images, vector<cv::Mat>& dst){
 		vector<cv::Point2f> points0;
 		vector<cv::Point2f> points1;
 		for (int i = 0; i < matches.size(); i++){
-			points0.push_back(keypoints0[matches[i].queryIdx].pt);
-			points1.push_back(keypoints1[matches[i].trainIdx].pt);
+			points0.push_back(keypoints0[matches[i].trainIdx].pt);
+			points1.push_back(keypoints1[matches[i].queryIdx].pt);
 		}
 
 		cv::findFundamentalMat(points0, points1, CV_RANSAC, 3.0, 0.9999999, mask);
@@ -202,16 +230,16 @@ void antiShake(const vector<T>& images, vector<cv::Mat>& dst){
 		}
 
 		cout << "\tfind homography" << endl;
-		cv::Mat homography = cv::findHomography(resImagePoints0, resImagePoints1, CV_RANSAC, 1.0);
-		cv::Mat image0resImage;
-		cv::warpPerspective(image0, image0resImage, homography, image0.size());
+		cv::Mat homography1to0 = cv::findHomography(resImagePoints1, resImagePoints0, CV_RANSAC, 1.0);
+		cv::Mat image1resImage;
+		cv::warpPerspective(image1, image1resImage, homography1to0, image1.size());
 
 		cout << "\timage area transformation use homography" << endl;
 		vector<cv::Point2f> imageRectPointsDst;
-		cv::perspectiveTransform( imageRectPoints, imageRectPointsDst, homography);
+		cv::perspectiveTransform( imageRectPoints, imageRectPointsDst, homography1to0);
 
 		cout << "\tdraw result" << endl;
-		resImage = image0resImage / 2 + image1;
+		resImage = image1resImage / 2 + image0;
 
 		if (USE_GUI){
 			cv::Mat show;
@@ -227,7 +255,9 @@ void antiShake(const vector<T>& images, vector<cv::Mat>& dst){
 			resImage = image0 / 2 + image1 / 2;
 			sstr <<  setw(5) << setfill('0') << j << operation_count++ <<  "_findHomography_original.jpg" << flush;
 			cv::imwrite(sstr.str(), resImage);
+
 		}
+		dst.push_back(image1resImage);
 	}
 }
 
@@ -276,6 +306,14 @@ int main(int argc, char** argv){
 	vector<ImageFileName> fnames;
 	videoSplitter(VIDEO_FILE_PATH, fnames);
 
+	cout << "filtere use images" << endl;
+	vector<ImageFileName> smallFnames;
+	int interval = fnames.size() / 10;
+	for (int i = 0; i < fnames.size(); i += interval){
+		smallFnames.push_back(fnames[i]);
+	}
+
+
 	/*
 	cout << "filtere use images" << endl;
 	vector<cv::Mat> images;
@@ -293,8 +331,11 @@ int main(int argc, char** argv){
 	*/
 
 	cout << "start anti shake" << endl;
-	vector<cv::Mat> dst;
+	//vector<cv::Mat> dst;
 	//antiShake<cv::Mat>(images, dst);
-	antiShake<ImageFileName>(fnames, dst);
+	//antiShake<ImageFileName, cv::Mat>(fnames, dst);
+
+	vector<ImageFileName> dst;
+	antiShake<ImageFileName, ImageFileName>(smallFnames, dst);
 
 }
