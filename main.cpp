@@ -15,21 +15,32 @@
 using namespace std;
 
 const string wname = "test";
-const bool use_video = true;
 
 const bool USE_GUI = false;
 const double IMAGE_SCALE = 0.5;
 
-const bool USE_OHD3PLUS4 = false;
-const bool USE_OHD3 = false;
-
 const int SPX_REGION_SIZE = 10;
 const int SPX_MIN_SIZE = 10;
 
+const double SOURCE_IMAGE_SCALE = 0.7;
+const int VIDEO_INTERVAL = 15;
+const int VIDEO_OUTPUT_FRAME_NUM = 30;
 
-const double SOURCE_IMAGE_SCALE = 1.0;
-const int VIDEO_INTERVAL = 60;
-const int VIDEO_OUTPUT_FRAME_NUM = 20;
+bool endsWith(const std::string& src, const std::string& ends, const bool compareWithLowerCase = false){
+	if (src.length() < ends.length()) return false;
+
+	if (compareWithLowerCase){
+		string tmpLower = src.substr(src.length() - ends.length());
+		transform(
+			tmpLower.begin(),
+			tmpLower.end(),
+			tmpLower.begin(), tolower);
+		return tmpLower == ends;
+	}
+	else {
+		return src.substr(src.length() - ends.length()) == ends;
+	}
+}
 
 int max(const cv::Mat& mat){
 
@@ -715,13 +726,96 @@ void onMouseEvent(int event, int x, int y, int flags, void *params){
 	p.working = false;
 }
 
+const int MINIMUM_IMAGE_NUM = 2;
+
+const int MODE_UNDEFINED = -1;
+const int MODE_AUTO_OHD3 = 0;
+const int MODE_AUTO_OHD4 = 1;
+const int MODE_MANUAL_OHD4 = 2;
+const int MODE_ONLY_ANTI_SHAKE = 3;
+
+const int USE_UNDEFINED = -1;
+const int USE_VIDEO = 0;
+const int USE_IMAGE = 1;
 
 int main(int argc, char** argv){
 
+	const string keys =
+		"{mode m |manual_ohd4| select from auto_ohd3, auto_ohd4, manual_ohd4 and only_antishake}"
+		"{source s|| video file or directory including 1 sequence images }"
+		"{lowmemory |false| execute on low memory mode which output images on memory as files}"
+		"{help h usage| | show this message}"
+		;
+
+	cv::CommandLineParser parser(argc, argv, keys);
+	parser.about("");
+
+	if (!parser.check()){
+		cout << "in check" << endl;
+		parser.printErrors();
+		getchar();
+		return 0;
+	}
+
+	if (parser.has("help")){
+		cout << "in help" << endl;
+		parser.printMessage();
+		getchar();
+		return 0;
+	}
+
+	int source = USE_UNDEFINED;
+	vector<cv::String> sourcePaths;
+	if (parser.has("source")){
+		string sourcePath = parser.get<string>("source");
+
+		replace(sourcePath.begin(), sourcePath.end(), '\\', '/');
+
+		cv::VideoCapture tmpVideo(sourcePath);
+		if (tmpVideo.isOpened()){//confirm source is video
+			source = USE_VIDEO;
+			tmpVideo.release();
+
+			sourcePaths.push_back(sourcePath);
+		}
+		else{
+			if (!endsWith(sourcePath, "/")){
+				sourcePath += '/';
+			}
+			
+			cv::glob(sourcePath += "*.jpg", sourcePaths);
+			if (sourcePaths.size() >= MINIMUM_IMAGE_NUM){
+				source = USE_IMAGE;
+			}
+		}
+	}
+
+	if (source == USE_UNDEFINED){
+		parser.printMessage();
+		return 0;
+	}
+
+	//*************************
+	// parse to use algorithm
+	//*************************
+	int mode = MODE_UNDEFINED;
+	if (parser.has("mode")){
+		const string modeStr = parser.get<string>("mode");
+		if (modeStr == "auto_ohd3") mode = MODE_AUTO_OHD3;
+		else if (modeStr == "auto_ohd4") mode == MODE_AUTO_OHD4;
+		else if (modeStr == "manual_ohd4") mode == MODE_MANUAL_OHD4;
+		else if (modeStr == "only_antishake") mode == MODE_ONLY_ANTI_SHAKE;
+	}
+	if(mode == MODE_UNDEFINED){
+		parser.printErrors();
+		return 0;
+	}
+
 	cv::namedWindow(wname);
 
+
 	vector<ImageFileName> dst;
-	if (use_video){
+	if (source == USE_VIDEO){
 		cout << "start video split" << endl;
 		vector<ImageFileName> fnames;
 		videoSplitter(VIDEO_FILE_PATH, fnames, VIDEO_INTERVAL, VIDEO_OUTPUT_FRAME_NUM, SOURCE_IMAGE_SCALE);
@@ -733,16 +827,21 @@ int main(int argc, char** argv){
 
 		antiShake<ImageFileName, ImageFileName>(fnames, dst);
 	}
-	else {
+	else if(source == USE_IMAGE){
 		ifstream ifs(IMAGES_LIST.c_str());
 		string line;
 		while (ifs>> line){
 			dst.push_back(IMAGES_DIR + line);
 		}
+
+		//TODO anti shake algorithm
 		
 	}
+	else {
+		CV_Error_(CV_StsBadArg, ("source is not video or images"));
+	}
 
-	if(USE_OHD3PLUS4){
+	if(mode == MODE_AUTO_OHD4){
 
 		//OHD4 algorithm
 		cout<< "exec super pix" <<endl;
@@ -795,7 +894,7 @@ int main(int argc, char** argv){
 		cv::imwrite("resulg_ohd3_ohd4.jpg", dst);
 
 	}
-	else if (USE_OHD3){
+	else if (MODE_AUTO_OHD3){
 		FrameComposerOrig fcomp;
 		vector<string> resultDst;
 		for (int i = 0; i < dst.size(); i++){
@@ -807,7 +906,7 @@ int main(int argc, char** argv){
 		cv::imwrite("result_erase_move_object.jpg", res);
 
 	}
-	else {
+	else if(MODE_MANUAL_OHD4){
 
 		cout<< "exec super pix" <<endl;
 		int regionSize = 50;
@@ -901,11 +1000,10 @@ int main(int argc, char** argv){
 		}
 
 	}
-
-
-
+	else{
+		CV_Error(CV_StsBadArg, "selecting algorithm is not found");
+	}
 
 	cout<< "end program" <<endl;
-
 
 }
