@@ -1,4 +1,4 @@
-#ifndef utils_h
+﻿#ifndef utils_h
 #define utils_h
 
 #include <string>

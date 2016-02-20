@@ -1,4 +1,4 @@
-#include "antishake.h"
+﻿#include "antishake.h"
 
 #include <opencv2/opencv.hpp>
 #include <vector>

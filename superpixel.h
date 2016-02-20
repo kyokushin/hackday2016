@@ -1,4 +1,4 @@
-#ifndef SUPERPIXEL_H
+﻿#ifndef SUPERPIXEL_H
 #define SUPERPIXEL_H
 
 #include "opencv2/opencv.hpp"

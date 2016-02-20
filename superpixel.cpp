@@ -1,4 +1,4 @@
-#include "superpixel.h"
+﻿#include "superpixel.h"
 #include "opencv2/ximgproc/slic.hpp"
 
 #include <iostream>

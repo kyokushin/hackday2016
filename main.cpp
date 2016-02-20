@@ -1,4 +1,4 @@
-#include <opencv2/opencv.hpp>
+﻿#include <opencv2/opencv.hpp>
 
 #include <iostream>
 #include <string>
@@ -184,6 +184,7 @@ int main(int argc, char** argv){
 	// Super pixel size
 	// display image scale or size
 	// video output num and interval
+	//TODO 確認用の出力ファイルをデフォルトで出力しないようにする
 
 	cv::CommandLineParser parser(argc, argv, keys);
 	parser.about("");

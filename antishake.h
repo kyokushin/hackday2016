@@ -1,4 +1,4 @@
-#ifndef antishake_h
+﻿#ifndef antishake_h
 #define antishake_h
 
 #include <opencv2/opencv.hpp>
