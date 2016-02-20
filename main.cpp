@@ -20,7 +20,6 @@ using namespace std;
 
 const string wname = "debug";
 
-const bool USE_GUI = false;
 const double IMAGE_SCALE = 0.5;
 
 const int SPX_REGION_SIZE = 10;
