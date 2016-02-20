@@ -162,7 +162,17 @@ const int USE_UNDEFINED = -1;
 const int USE_VIDEO = 0;
 const int USE_IMAGE = 1;
 
+
+int opencvErrorHandler(int status, const char* func_name, const char* err_msg, const char* file_name, int line, void* userdata){
+	return 0;
+}
+
+
 int main(int argc, char** argv){
+
+#ifndef _DEBUG
+	cv::redirectError(opencvErrorHandler);
+#endif
 
 	const string keys =
 		"{mode m |manual_ohd4| select from auto_ohd3, auto_ohd4, manual_ohd4 and only_antishake}"
@@ -170,13 +180,17 @@ int main(int argc, char** argv){
 		"{lowmemory |false| execute on low memory mode which output images on memory as files}"
 		"{help h usage| | show this message}"
 		;
+	//TODO add other options
+	// Super pixel size
+	// display image scale or size
+	// video output num and interval
 
 	cv::CommandLineParser parser(argc, argv, keys);
 	parser.about("");
 
 	if (!parser.check()){
 		cout << "in check" << endl;
-		parser.printErrors();
+		parser.printMessage();
 		getchar();
 		return 0;
 	}
@@ -195,25 +209,32 @@ int main(int argc, char** argv){
 
 		replace(sourcePath.begin(), sourcePath.end(), '\\', '/');
 
-		cv::VideoCapture tmpVideo(sourcePath);
-		if (tmpVideo.isOpened()){//confirm source is video
-			source = USE_VIDEO;
-			tmpVideo.release();
-
-			sourcePaths.push_back(sourcePath);
+		try{
+			cv::VideoCapture tmpVideo(sourcePath);
+			if (tmpVideo.isOpened()){//confirm source is video
+				source = USE_VIDEO;
+				tmpVideo.release();
+				sourcePaths.push_back(sourcePath);
+				cout << "source is video" << endl;
+			}
 		}
-		else{
-			if (!endsWith(sourcePath, "/")){
-				sourcePath += '/';
+		catch (...){
+		}
+		if (source == USE_UNDEFINED){
+			try{
+				if (!endsWith(sourcePath, "/")){
+					sourcePath += '/';
+				}
+
+				cv::glob(sourcePath += "*.jpg", sourcePaths);
+				if (sourcePaths.size() >= MINIMUM_IMAGE_NUM){
+					source = USE_IMAGE;
+					cout << "source is images" << endl;
+				}
 			}
-			
-			cv::glob(sourcePath += "*.jpg", sourcePaths);
-			if (sourcePaths.size() >= MINIMUM_IMAGE_NUM){
-				source = USE_IMAGE;
-			}
+			catch (...){}
 		}
 	}
-
 	if (source == USE_UNDEFINED){
 		parser.printMessage();
 		return 0;
@@ -223,15 +244,17 @@ int main(int argc, char** argv){
 	// parse to use algorithm
 	//*************************
 	int mode = MODE_UNDEFINED;
-	if (parser.has("mode")){
+	//if (parser.has("mode")){
 		const string modeStr = parser.get<string>("mode");
+		cout << "mode:" << modeStr << endl;
 		if (modeStr == "auto_ohd3") mode = MODE_AUTO_OHD3;
-		else if (modeStr == "auto_ohd4") mode == MODE_AUTO_OHD4;
-		else if (modeStr == "manual_ohd4") mode == MODE_MANUAL_OHD4;
-		else if (modeStr == "only_antishake") mode == MODE_ONLY_ANTI_SHAKE;
-	}
+		else if (modeStr == "auto_ohd4") mode = MODE_AUTO_OHD4;
+		else if (modeStr == "manual_ohd4") mode = MODE_MANUAL_OHD4;
+		else if (modeStr == "only_antishake") mode = MODE_ONLY_ANTI_SHAKE;
+	//}
 	if(mode == MODE_UNDEFINED){
-		parser.printErrors();
+		cerr << "mode is unselected" << endl;
+		parser.printMessage();
 		return 0;
 	}
 
@@ -240,7 +263,7 @@ int main(int argc, char** argv){
 
 	vector<ImageFileName> dst;
 	if (source == USE_VIDEO){
-		cout << "start video split" << endl;
+		cout << "start video split" << sourcePaths[0] << endl;
 		vector<ImageFileName> fnames;
 		videoSplitter(sourcePaths[0], fnames, VIDEO_INTERVAL, VIDEO_OUTPUT_FRAME_NUM, SOURCE_IMAGE_SCALE);
 
