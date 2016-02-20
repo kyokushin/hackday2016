@@ -6,8 +6,6 @@
 #include <iomanip>
 #include <fstream>
 
-#include <configure.h>
-
 #include "FrameComposer.h"
 #include "FrameComposer_orig.h"
 #include "superpixel.h"
@@ -244,7 +242,7 @@ int main(int argc, char** argv){
 	if (source == USE_VIDEO){
 		cout << "start video split" << endl;
 		vector<ImageFileName> fnames;
-		videoSplitter(VIDEO_FILE_PATH, fnames, VIDEO_INTERVAL, VIDEO_OUTPUT_FRAME_NUM, SOURCE_IMAGE_SCALE);
+		videoSplitter(sourcePaths[0], fnames, VIDEO_INTERVAL, VIDEO_OUTPUT_FRAME_NUM, SOURCE_IMAGE_SCALE);
 
 		cout << "start anti shake" << endl;
 		//vector<cv::Mat> dst;
@@ -254,14 +252,13 @@ int main(int argc, char** argv){
 		antiShake<ImageFileName, ImageFileName>(fnames, dst);
 	}
 	else if(source == USE_IMAGE){
-		ifstream ifs(IMAGES_LIST.c_str());
-		string line;
-		while (ifs>> line){
-			dst.push_back(IMAGES_DIR + line);
-		}
-
 		//TODO anti shake algorithm
 		
+		vector<ImageFileName> fnames;
+		for (int i = 0; i < sourcePaths.size(); i++){
+			fnames.push_back((string)sourcePaths[i]);
+		}
+		antiShake<ImageFileName, ImageFileName>(fnames, dst);
 	}
 	else {
 		CV_Error_(CV_StsBadArg, ("source is not video or images"));
