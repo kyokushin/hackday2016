@@ -12,6 +12,7 @@
 #include "antishake.h"
 
 #include "utils.h"
+#include "options.h"
 
 
 using namespace std;
@@ -166,7 +167,6 @@ const int USE_VIDEO = 0;
 const int USE_IMAGE = 1;
 
 
-
 int opencvErrorHandler(int status, const char* func_name, const char* err_msg, const char* file_name, int line, void* userdata){
 	return 0;
 }
@@ -262,7 +262,11 @@ int main(int argc, char** argv){
 	if (modeStr == "auto_ohd3") mode = MODE_AUTO_OHD3;
 	else if (modeStr == "auto_ohd4") mode = MODE_AUTO_OHD4;
 	else if (modeStr == "manual_ohd4") mode = MODE_MANUAL_OHD4;
-	else if (modeStr == "only_antishake") mode = MODE_ONLY_ANTI_SHAKE;
+	else if (modeStr == "only_antishake"){
+		mode = MODE_ONLY_ANTI_SHAKE;
+		cerr << "sorry. this function not implemented yet." << endl;
+		return -1;
+	}
 	if(mode == MODE_UNDEFINED){
 		cerr << "unsupported mode : " << modeStr << endl;
 		parser.printMessage();
@@ -418,28 +422,31 @@ int main(int argc, char** argv){
 		
 		vector<cv::Mat> labelImages;
 		vector<cv::Mat> contourImages;
+		vector<cv::Mat> spxImages;
 		spx.calcSuperPixel(resizeDst, labelImages, contourImages, 10.0f, 10, 10);
 
-		cout<< "output super pix result" <<endl;
-		stringstream sstr;
-		for(int i=0; i<labelImages.size(); i++){
-			sstr.str("");
-			sstr << "labeled_image_" << i << ".jpg" <<flush;
-			string fname = sstr.str();
-			cout<< "\tlabeled:" << fname <<endl;
-			cv::imwrite(fname, contourImages[i]);
+		if (INTERMEDIATE_SAVE == intermediateMethod){
+			cout << "output super pix result" << endl;
+			stringstream sstr;
+			for (int i = 0; i < labelImages.size(); i++){
+				sstr.str("");
+				sstr << "labeled_image_" << i << ".jpg" << flush;
+				string fname = sstr.str();
+				cout << "\tlabeled:" << fname << endl;
+				cv::imwrite(fname, contourImages[i]);
+			}
 		}
 
 		cout << "draw spx result" << endl;
-		vector<cv::Mat> spxImages;
-		cv::Mat white = resizeDst[0].clone();
 		for (int i = 0; i < contourImages.size(); i++){
 			cout << "\tdraw contour" << endl;
 			cv::Mat image = resizeDst[i].clone();
 			image.setTo( cv::Scalar(0,0,255), contourImages[i]);
-			sstr.str("");
-			sstr << "draw_spx_contour_" << i << ".jpg" << flush;
-			cv::imwrite(sstr.str(), image);
+			if (INTERMEDIATE_SAVE == intermediateMethod){
+				stringstream sstr;
+				sstr << "draw_spx_contour_" << i << ".jpg" << flush;
+				cv::imwrite(sstr.str(), image);
+			}
 			spxImages.push_back(image);
 		}
 

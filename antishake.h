@@ -3,6 +3,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <vector>
+#include "options.h"
 
 int max(const cv::Mat& mat);
 
@@ -10,10 +11,6 @@ void ohd3PlusOhd4(const cv::Mat& frameCompRes,
 	const std::vector<cv::Mat>& labelImages,
 	const std::vector<cv::Mat>& srcImages,
 	cv::Mat& dst);
-
-const int INTERMEDIATE_NOTHING = 0;
-const int INTERMEDIATE_SHOW = 1;
-const int INTERMEDIATE_SAVE = 2;
 
 template<typename T, typename S>
 void antiShake(const std::vector<T>& images, std::vector<S>& dst, const int intermediate_method=INTERMEDIATE_NOTHING, const double displayScale=0.5){
