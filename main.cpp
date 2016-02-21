@@ -18,6 +18,7 @@ using namespace std;
 
 const string wname = "debug";
 
+/*
 const double IMAGE_SCALE = 0.5;
 
 const int SPX_REGION_SIZE = 10;
@@ -26,6 +27,7 @@ const int SPX_MIN_SIZE = 10;
 const double SOURCE_IMAGE_SCALE = 0.7;
 const int VIDEO_INTERVAL = 15;
 const int VIDEO_OUTPUT_FRAME_NUM = 30;
+*/
 
 
 
@@ -152,6 +154,7 @@ void onMouseEvent(int event, int x, int y, int flags, void *params){
 
 const int MINIMUM_IMAGE_NUM = 2;
 
+
 const int MODE_UNDEFINED = -1;
 const int MODE_AUTO_OHD3 = 0;
 const int MODE_AUTO_OHD4 = 1;
@@ -178,13 +181,14 @@ int main(int argc, char** argv){
 		"{mode m |manual_ohd4| select from auto_ohd3, auto_ohd4, manual_ohd4 and only_antishake}"
 		"{source s|| video file or directory including 1 sequence images }"
 		"{lowmemory |false| execute on low memory mode which output images on memory as files}"
+		"{display_scale|0.5| display image size in manual_ohd4}"
+		"{spx_region_size| 10 | super pixel processing size}"
+		"{spx_min_size| 10 | if super pixel smaller than this value, combine other super pixel}"
+		"{resize_scale| 0.7 | resize processed image scale}"
+		"{video_interval| 15 | grab flame by this interval}"
+		"{frame_num | 30 | processed num of images}"
 		"{help h usage| | show this message}"
 		;
-	//TODO add other options
-	// Super pixel size
-	// display image scale or size
-	// video output num and interval
-	//TODO 確認用の出力ファイルをデフォルトで出力しないようにする
 
 	cv::CommandLineParser parser(argc, argv, keys);
 	parser.about("");
@@ -242,31 +246,38 @@ int main(int argc, char** argv){
 	}
 
 	//*************************
-	// parse to use algorithm
+	// parse using algorithm
 	//*************************
 	int mode = MODE_UNDEFINED;
-	//if (parser.has("mode")){
-		const string modeStr = parser.get<string>("mode");
-		cout << "mode:" << modeStr << endl;
-		if (modeStr == "auto_ohd3") mode = MODE_AUTO_OHD3;
-		else if (modeStr == "auto_ohd4") mode = MODE_AUTO_OHD4;
-		else if (modeStr == "manual_ohd4") mode = MODE_MANUAL_OHD4;
-		else if (modeStr == "only_antishake") mode = MODE_ONLY_ANTI_SHAKE;
-	//}
+	const string modeStr = parser.get<string>("mode");
+	cout << "mode:" << modeStr << endl;
+	if (modeStr == "auto_ohd3") mode = MODE_AUTO_OHD3;
+	else if (modeStr == "auto_ohd4") mode = MODE_AUTO_OHD4;
+	else if (modeStr == "manual_ohd4") mode = MODE_MANUAL_OHD4;
+	else if (modeStr == "only_antishake") mode = MODE_ONLY_ANTI_SHAKE;
 	if(mode == MODE_UNDEFINED){
-		cerr << "mode is unselected" << endl;
+		cerr << "unsupported mode : " << modeStr << endl;
 		parser.printMessage();
 		return 0;
 	}
 
 	cv::namedWindow(wname);
 
+	//**************************
+	// parse source parameters 
+	//**************************
+	const int videoInterval = parser.get<int>("video_interval");
+	const int frameNum = parser.get<int>("frame_num");
+	const double resizeScale = parser.get<double>("resize_scale"); 
 
+	//*********************
+	// parse used source
+	//*********************
 	vector<ImageFileName> dst;
 	if (source == USE_VIDEO){
 		cout << "start video split" << sourcePaths[0] << endl;
 		vector<ImageFileName> fnames;
-		videoSplitter(sourcePaths[0], fnames, VIDEO_INTERVAL, VIDEO_OUTPUT_FRAME_NUM, SOURCE_IMAGE_SCALE);
+		videoSplitter(sourcePaths[0], fnames, videoInterval, frameNum, resizeScale);
 
 		cout << "start anti shake" << endl;
 		//vector<cv::Mat> dst;
@@ -288,31 +299,37 @@ int main(int argc, char** argv){
 		CV_Error_(CV_StsBadArg, ("source is not video or images"));
 	}
 
+	//************************
+	// parse other parameter
+	//************************
+	const double displayScale = parser.get<double>("display_scale");
+	const int spxRegionSize = parser.get<int>("spx_region_size");
+	const int spxMinSize = parser.get<int>("spx_min_size");
+
 	if(mode == MODE_AUTO_OHD4){
 
 		//OHD4 algorithm
 		cout<< "exec super pix" <<endl;
-		int regionSize = SPX_REGION_SIZE;
 		vector<cv::Mat> resizeDst;
 		for(int i=0; i<dst.size(); i++){
 			cv::Mat image = dst[i];
 			cv::Mat resized;
-			cv::resize(image, resized, cv::Size(image.cols/regionSize * regionSize, image.rows/regionSize * regionSize));
+			cv::resize(image, resized, cv::Size(image.cols/spxRegionSize* spxRegionSize, image.rows/spxRegionSize* spxRegionSize));
 			resizeDst.push_back(resized);
 			cout<< "\t" << i << ":" << resized.size() <<endl;
 		}
 
 		cout << "start super pixel" << endl;
-		Slic spx(regionSize);
+		Slic spx(spxRegionSize);
 		vector<cv::Mat> labelImages;
 		vector<cv::Mat> contourImages;
-		spx.calcSuperPixel(resizeDst, labelImages, contourImages, 10.0f, 10, SPX_MIN_SIZE);
+		spx.calcSuperPixel(resizeDst, labelImages, contourImages, 10.0f, 10, spxMinSize);
 
 		for (int i = 0; i < contourImages.size(); i++){
 			cout << "\tdraw contour" << endl;
 			cv::Mat image = resizeDst[i].clone();
 			image.setTo( cv::Scalar(0,0,255), contourImages[i]);
-			cv::resize(image, image, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+			cv::resize(image, image, cv::Size(), displayScale, displayScale);
 			cv::imshow(wname, image);
 			cv::waitKey();
 		}
@@ -400,7 +417,7 @@ int main(int argc, char** argv){
 
 		params.currentImageIdx = 0;
 		params.init(resizeDst, labelImages);
-		params.scale = IMAGE_SCALE;
+		params.scale = displayScale;
 
 		cout << "start selecting ui" << endl;
 		int key = -1;
