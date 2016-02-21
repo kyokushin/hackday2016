@@ -9,6 +9,10 @@
 bool endsWith(const std::string& src, const std::string& ends, const bool compareWithLowerCase = false);
 
 
+/**
+* cv::Matへの、またはからのキャストが可能なstringの拡張クラス
+* cv::Matの拡張にすべきだったがイベント中に良い案が思いつかなかったためこのような形に
+*/
 class ImageFileName : public std::string {
 
 private:
@@ -50,7 +54,7 @@ cv::Scalar randColor(cv::RNG& rng);
 template<typename T>
 void videoSplitter(const std::string& fname,
 	std::vector<T>& dst, const int interval = 1,
-	const int numOfImages = -1, const double scale = 1.0, const std::string& outputPath = "", const bool showFrame = false){
+	const int numOfImages = -1, const double scale = 1.0, const std::string& outputPath = "", const bool showFrame = false, const double displayScale=0.7){
 
 	cv::VideoCapture cap(fname);
 
@@ -84,7 +88,7 @@ void videoSplitter(const std::string& fname,
 		cap.retrieve(frame);
 		if (showFrame){
 			cv::Mat show;
-			cv::resize(frame, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+			cv::resize(frame, show, cv::Size(), displayScale, displayScale);
 			cv::imshow(wname, show);
 			cv::waitKey();
 		}

@@ -1,4 +1,6 @@
-
+/***********************************************
+* OpenHackDay3で使用したアルゴリズムのオリジナル版
+*/
 #include <vector>
 #include <string>
 #include <opencv2/opencv.hpp>

@@ -11,8 +11,12 @@ void ohd3PlusOhd4(const cv::Mat& frameCompRes,
 	const std::vector<cv::Mat>& srcImages,
 	cv::Mat& dst);
 
+const int INTERMEDIATE_NOTHING = 0;
+const int INTERMEDIATE_SHOW = 1;
+const int INTERMEDIATE_SAVE = 2;
+
 template<typename T, typename S>
-void antiShake(const std::vector<T>& images, std::vector<S>& dst, const bool use_gui=false){
+void antiShake(const std::vector<T>& images, std::vector<S>& dst, const int intermediate_method=INTERMEDIATE_NOTHING, const double displayScale=0.5){
 	cv::Ptr<cv::FeatureDetector> detector;
 	//detector = cv::BRISK::create();
 	detector = cv::AKAZE::create();
@@ -40,13 +44,13 @@ void antiShake(const std::vector<T>& images, std::vector<S>& dst, const bool use
 
 	cv::Mat resImage;
 	cv::drawKeypoints(image0, keypoints0, resImage);
-	if (use_gui){
+	if (INTERMEDIATE_SHOW == intermediate_method){
 		cv::Mat show;
-		cv::resize(resImage, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+		cv::resize(resImage, show, cv::Size(), displayScale, displayScale);
 		cv::imshow(wname, show);
 		cv::waitKey();
 	}
-	else{
+	else if(INTERMEDIATE_SAVE == intermediate_method){
 		stringstream sstr;
 		sstr << setw(5) << setfill('0') << 0 << "_" << 0 << "_image_draw_keypoint.jpg" << flush;
 		cv::imwrite(sstr.str(), resImage);
@@ -73,13 +77,13 @@ void antiShake(const std::vector<T>& images, std::vector<S>& dst, const bool use
 		detector->detect(image1, keypoints1);
 
 		cv::drawKeypoints(image1, keypoints1, resImage);
-		if (use_gui){
+		if (INTERMEDIATE_SHOW == intermediate_method){
 			cv::Mat show;
-			cv::resize(resImage, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+			cv::resize(resImage, show, cv::Size(), displayScale, displayScale);
 			cv::imshow(wname, show);
 			cv::waitKey();
 		}
-		else{
+		else if(INTERMEDIATE_SAVE == intermediate_method){
 			stringstream sstr;
 			sstr << setw(5) << setfill('0') << j << "_" << operation_count++ << "_image_draw_keypoint.jpg" << flush;
 			cv::imwrite(sstr.str(), resImage);
@@ -98,13 +102,13 @@ void antiShake(const std::vector<T>& images, std::vector<S>& dst, const bool use
 		cout << "\tdraw matches" << endl;
 		cv::drawMatches(image1, keypoints1, image0, keypoints0, matches, resImage);
 
-		if (use_gui){
+		if (INTERMEDIATE_SHOW == intermediate_method){
 			cv::Mat show;
-			cv::resize(resImage, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+			cv::resize(resImage, show, cv::Size(), displayScale, displayScale);
 			cv::imshow(wname, show);
 			cv::waitKey();
 		}
-		else{
+		else if(INTERMEDIATE_SAVE == intermediate_method){
 			stringstream sstr;
 			sstr << setw(5) << setfill('0') << j << "_" << operation_count++ << "_match_result.jpg" << flush;
 			cv::imwrite(sstr.str(), resImage);
@@ -137,13 +141,13 @@ void antiShake(const std::vector<T>& images, std::vector<S>& dst, const bool use
 		image0.copyTo(cv::Mat(resImage, cv::Rect(0, 0, image0.cols, image0.rows)));
 		image1.copyTo(cv::Mat(resImage, cv::Rect(image0.cols, 0, image1.cols, image1.rows)));
 
-		if (use_gui){
+		if (INTERMEDIATE_SHOW == intermediate_method){
 			cv::Mat show;
-			cv::resize(resImage, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+			cv::resize(resImage, show, cv::Size(), displayScale, displayScale);
 			cv::imshow(wname, show);
 			cv::waitKey();
 		}
-		else{
+		else if(INTERMEDIATE_SAVE == intermediate_method){
 			stringstream sstr;
 			sstr<< setw(5) << setfill('0') << j << "_" << operation_count++ << "_pair_image.jpg" << flush;
 			cv::imwrite(sstr.str(), resImage);
@@ -159,13 +163,13 @@ void antiShake(const std::vector<T>& images, std::vector<S>& dst, const bool use
 			cv::line(resImage, p0, p1, randColor(rng));
 		}
 
-		if (use_gui){
+		if (INTERMEDIATE_SHOW == intermediate_method){
 			cv::Mat show;
-			cv::resize(resImage, show, cv::Size(), IMAGE_SCALE, IMAGE_SCALE);
+			cv::resize(resImage, show, cv::Size(), displayScale, displayScale);
 			cv::imshow(wname, show);
 			cv::waitKey();
 		}
-		else{
+		else if(INTERMEDIATE_SAVE == intermediate_method){
 			stringstream sstr;
 			sstr<< setw(5) << setfill('0') << j << "_" << operation_count++ << "_findFundamentalMat_result.jpg" << flush;
 			cv::imwrite(sstr.str(), resImage);
@@ -229,13 +233,13 @@ void antiShake(const std::vector<T>& images, std::vector<S>& dst, const bool use
 		cout << "\tdraw result" << endl;
 		resImage = image1resImage / 2 + image0;
 
-		if (use_gui){
+		if (INTERMEDIATE_SHOW == intermediate_method){
 			cv::Mat show;
 			cv::resize(resImage, show, cv::Size(), 0.5, 0.5);
 			cv::imshow(wname, show);
 			cv::waitKey();
 		}
-		else{
+		else if(INTERMEDIATE_SAVE == intermediate_method){
 			stringstream sstr;
 			sstr << setw(5) << setfill('0') << j << "_" << operation_count++  <<"_findHomography_result_" << ".jpg" << flush;
 			cv::imwrite(sstr.str(), resImage);

@@ -166,8 +166,18 @@ const int USE_VIDEO = 0;
 const int USE_IMAGE = 1;
 
 
+
 int opencvErrorHandler(int status, const char* func_name, const char* err_msg, const char* file_name, int line, void* userdata){
 	return 0;
+}
+
+void showGuiHelp(){
+	cout << "usage" << endl
+		<< "\t<-(left arrow) | change using frame index" << endl
+		<< "\t->(right arrow) | change using frame index" << endl
+		<< "\ti | inpaint blank space(experimental)" << endl
+		<< "\ts | save result window image" <<endl
+		<< endl;
 }
 
 
@@ -179,26 +189,21 @@ int main(int argc, char** argv){
 
 	const string keys =
 		"{mode m |manual_ohd4| select from auto_ohd3, auto_ohd4, manual_ohd4 and only_antishake}"
-		"{source s|| video file or directory including 1 sequence images }"
-		"{lowmemory |false| execute on low memory mode which output images on memory as files}"
+		"{@source| | video file or directory including 1 sequence images }"
 		"{display_scale|0.5| display image size in manual_ohd4}"
 		"{spx_region_size| 10 | super pixel processing size}"
 		"{spx_min_size| 10 | if super pixel smaller than this value, combine other super pixel}"
 		"{resize_scale| 0.7 | resize processed image scale}"
 		"{video_interval| 15 | grab flame by this interval}"
 		"{frame_num | 30 | processed num of images}"
+		"{intermediate_images | nothing | show or save or nothing intermediate images}"
 		"{help h usage| | show this message}"
 		;
 
 	cv::CommandLineParser parser(argc, argv, keys);
-	parser.about("");
+	//parser.about("");
+	cout << "parse created" << endl;
 
-	if (!parser.check()){
-		cout << "in check" << endl;
-		parser.printMessage();
-		getchar();
-		return 0;
-	}
 
 	if (parser.has("help")){
 		cout << "in help" << endl;
@@ -209,8 +214,10 @@ int main(int argc, char** argv){
 
 	int source = USE_UNDEFINED;
 	vector<cv::String> sourcePaths;
-	if (parser.has("source")){
-		string sourcePath = parser.get<string>("source");
+	cout << "source:" << parser.get<string>(0) << endl;
+	if ( parser.get<string>(0).size() > 0){
+	//if (parser.has("source") && parser.get<string>("source") != "true"){
+		string sourcePath = parser.get<string>(0);
 
 		replace(sourcePath.begin(), sourcePath.end(), '\\', '/');
 
@@ -241,6 +248,7 @@ int main(int argc, char** argv){
 		}
 	}
 	if (source == USE_UNDEFINED){
+		cerr << "failed to open source :" << parser.get<string>(0) << endl;
 		parser.printMessage();
 		return 0;
 	}
@@ -270,6 +278,34 @@ int main(int argc, char** argv){
 	const int frameNum = parser.get<int>("frame_num");
 	const double resizeScale = parser.get<double>("resize_scale"); 
 
+	//************************
+	// parse other parameter
+	//************************
+	const double displayScale = parser.get<double>("display_scale");
+	const int spxRegionSize = parser.get<int>("spx_region_size");
+	const int spxMinSize = parser.get<int>("spx_min_size");
+	const string intermediateMethodStr = parser.get<string>("intermediate_images");
+	int intermediateMethod;
+	if (intermediateMethodStr == "nothing"){
+		intermediateMethod = INTERMEDIATE_NOTHING;
+	}
+	else if (intermediateMethodStr == "show"){
+		intermediateMethod = INTERMEDIATE_SHOW;
+	}
+	else if (intermediateMethodStr == "save"){
+		intermediateMethod = INTERMEDIATE_SAVE;
+	}
+	else {
+		cerr << "undefined method:" << parser.get<string>("intermediate_images");
+	}
+
+	if (!parser.check()){
+		cout << "in check" << endl;
+		parser.printErrors();
+		getchar();
+		return 0;
+	}
+
 	//*********************
 	// parse used source
 	//*********************
@@ -284,7 +320,7 @@ int main(int argc, char** argv){
 		//antiShake<cv::Mat>(images, dst);
 		//antiShake<ImageFileName, cv::Mat>(fnames, dst);
 
-		antiShake<ImageFileName, ImageFileName>(fnames, dst);
+		antiShake<ImageFileName, ImageFileName>(fnames, dst, intermediateMethod, displayScale);
 	}
 	else if(source == USE_IMAGE){
 		//TODO anti shake algorithm
@@ -293,18 +329,13 @@ int main(int argc, char** argv){
 		for (int i = 0; i < sourcePaths.size(); i++){
 			fnames.push_back((string)sourcePaths[i]);
 		}
-		antiShake<ImageFileName, ImageFileName>(fnames, dst);
+		antiShake<ImageFileName, ImageFileName>(fnames, dst, intermediateMethod, displayScale);
 	}
 	else {
-		CV_Error_(CV_StsBadArg, ("source is not video or images"));
+		cerr << "processed source is unrecognized" << endl;
+		parser.printMessage();
+		return 0;
 	}
-
-	//************************
-	// parse other parameter
-	//************************
-	const double displayScale = parser.get<double>("display_scale");
-	const int spxRegionSize = parser.get<int>("spx_region_size");
-	const int spxMinSize = parser.get<int>("spx_min_size");
 
 	if(mode == MODE_AUTO_OHD4){
 
@@ -440,7 +471,10 @@ int main(int argc, char** argv){
 
 			cout << "key:" << key << endl;
 
-			if (key == 2555904){
+			if (ch_key == 'h'){
+				showGuiHelp();
+			}
+			else if (key == 2555904){
 				params.currentImageIdx++;
 			}
 			else if (key == 2424832){
@@ -460,6 +494,10 @@ int main(int argc, char** argv){
 				cv::imshow(params.wname, result);
 				cv::waitKey();
 				cv::imwrite("inpainting_result.jpg", result);
+			}
+			else if (ch_key == 's'){
+				cout << "save result" << endl;
+				cv::imwrite("result.jpg", params.result);
 			}
 		}
 
