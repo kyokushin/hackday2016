@@ -1,11 +1,13 @@
 ﻿#include "antishake.h"
 
+#include "utils.h"
+
 #include <opencv2/opencv.hpp>
 #include <vector>
 
 using namespace std;
 
-int max(const cv::Mat& mat){
+int antishake::max(const cv::Mat& mat){
 
 	int max = 0;
 	for (int i = 0; i < mat.rows; i++){
@@ -20,7 +22,7 @@ int max(const cv::Mat& mat){
 	return max;
 }
 
-void ohd3PlusOhd4(const cv::Mat& frameCompRes,
+void antishake::ohd3PlusOhd4(const cv::Mat& frameCompRes,
 	const vector<cv::Mat>& labelImages,
 	const vector<cv::Mat>& srcImages,
 	cv::Mat& dst){
@@ -45,7 +47,7 @@ void ohd3PlusOhd4(const cv::Mat& frameCompRes,
 		cout << maxIdx << endl;
 
 		cout << "init counter" << endl;
-		vector<vector<int>> countsPerLabel;
+		vector<vector<int> > countsPerLabel;
 		for (int j = 0; j <= maxIdx; j++){
 
 			vector<int> tmp;
@@ -131,7 +133,7 @@ void ohd3PlusOhd4(const cv::Mat& frameCompRes,
 		cout << maxIdx << endl;
 
 		cout << "init counter" << endl;
-		vector<vector<int>> countsPerLabel;
+		vector<vector<int> > countsPerLabel;
 		for (int j = 0; j < maxIdx; j++){
 
 			vector<int> tmp;
@@ -205,4 +207,6 @@ void ohd3PlusOhd4(const cv::Mat& frameCompRes,
 
 	}
 }
+
+
 

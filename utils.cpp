@@ -4,10 +4,12 @@
 #include <sstream>
 #include <iomanip>
 
+#include <algorithm>
+
 using namespace std;
 
 
-bool endsWith(const std::string& src, const std::string& ends, const bool compareWithLowerCase ){
+bool ysutils::endsWith(const std::string& src, const std::string& ends, const bool compareWithLowerCase ){
 	if (src.length() < ends.length()) return false;
 
 	if (compareWithLowerCase){
@@ -15,7 +17,7 @@ bool endsWith(const std::string& src, const std::string& ends, const bool compar
 		transform(
 			tmpLower.begin(),
 			tmpLower.end(),
-			tmpLower.begin(), tolower);
+			tmpLower.begin(), ::tolower);
 		return tmpLower == ends;
 	}
 	else {
@@ -26,7 +28,7 @@ bool endsWith(const std::string& src, const std::string& ends, const bool compar
 
 
 
-void ImageFileName::saveTmpFile(ImageFileName& fname, const cv::Mat& image){
+void ysutils::ImageFileName::saveTmpFile(ImageFileName& fname, const cv::Mat& image){
 	stringstream sstr;
 	sstr << PREFIX << setw(8) << setfill('0') << save_counter++ << EXT << flush;
 	fname = sstr.str();
@@ -37,7 +39,7 @@ void ImageFileName::saveTmpFile(ImageFileName& fname, const cv::Mat& image){
 }
 
 
-ImageFileName::operator cv::Mat() const {
+ysutils::ImageFileName::operator cv::Mat() const {
 	cv::Mat image = cv::imread(*this);
 	if (image.empty()){
 		cerr << "failed to read image:" << *this << endl;
@@ -46,11 +48,11 @@ ImageFileName::operator cv::Mat() const {
 	return image;
 }
 
-int ImageFileName::save_counter = 0;
-const std::string ImageFileName::EXT = ".jpg";
-const std::string ImageFileName::PREFIX = "_ImageFileName";
+int ysutils::ImageFileName::save_counter = 0;
+const std::string ysutils::ImageFileName::EXT = ".jpg";
+const std::string ysutils::ImageFileName::PREFIX = "_ImageFileName";
 
-cv::Scalar randColor(cv::RNG& rng){
+cv::Scalar ysutils::randColor(cv::RNG& rng){
 
 	int color = rng();
 

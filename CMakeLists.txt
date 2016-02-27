@@ -10,6 +10,7 @@ link_directories(${OpenCV_LIBRARY_DIRS})
 
 file(GLOB SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 
+
 add_executable(main ${SOURCES})
 target_link_libraries(main ${OpenCV_LIBRARIES})
 

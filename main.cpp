@@ -36,21 +36,26 @@ struct MouseEventParams{
 	vector<cv::Mat> srcImages;//antiShaking and crop internal area
 	vector<cv::Mat> labeledImages;
 
-	double scale = 1.0;
+	double scale;
 	cv::Mat selectedMap;
-	int currentImageIdx = 0;
+	int currentImageIdx ;
 	cv::Mat result;
 	cv::Mat resultFilled;
 	cv::Mat showImage;
-	const string wname = "result";
+	const string wname;
 
 	cv::Mat mask;
 
-	cv::Scalar mouseColor = cv::Scalar(0,0,255);
+	cv::Scalar mouseColor;
 
-	bool leftDown = false;
-	bool rightDown = false;
-	bool working = false;
+	bool leftDown ;
+	bool rightDown ;
+	bool working;
+
+	MouseEventParams()
+		:scale(1.0), currentImageIdx(0), wname("result"), mouseColor(cv::Scalar(0,0,255)),
+		leftDown(false), rightDown(false), working(false)
+	{}
 
 	void init(vector<cv::Mat>& srcImages, vector<cv::Mat>& labeledImages){
 		if (labeledImages.size() == 0){
@@ -234,7 +239,7 @@ int main(int argc, char** argv){
 		}
 		if (source == USE_UNDEFINED){
 			try{
-				if (!endsWith(sourcePath, "/")){
+				if (!ysutils::endsWith(sourcePath, "/")){
 					sourcePath += '/';
 				}
 
@@ -313,27 +318,27 @@ int main(int argc, char** argv){
 	//*********************
 	// parse used source
 	//*********************
-	vector<ImageFileName> dst;
+	vector<ysutils::ImageFileName> dst;
 	if (source == USE_VIDEO){
 		cout << "start video split" << sourcePaths[0] << endl;
-		vector<ImageFileName> fnames;
+		vector<ysutils::ImageFileName> fnames;
 		videoSplitter(sourcePaths[0], fnames, videoInterval, frameNum, resizeScale);
 
 		cout << "start anti shake" << endl;
 		//vector<cv::Mat> dst;
 		//antiShake<cv::Mat>(images, dst);
-		//antiShake<ImageFileName, cv::Mat>(fnames, dst);
+		//antiShake<ysutils::ImageFileName, cv::Mat>(fnames, dst);
 
-		antiShake<ImageFileName, ImageFileName>(fnames, dst, intermediateMethod, displayScale);
+		antishake::antiShake<ysutils::ImageFileName, ysutils::ImageFileName>(fnames, dst, intermediateMethod, displayScale);
 	}
 	else if(source == USE_IMAGE){
 		//TODO anti shake algorithm
 		
-		vector<ImageFileName> fnames;
+		vector<ysutils::ImageFileName> fnames;
 		for (int i = 0; i < sourcePaths.size(); i++){
 			fnames.push_back((string)sourcePaths[i]);
 		}
-		antiShake<ImageFileName, ImageFileName>(fnames, dst, intermediateMethod, displayScale);
+		antishake::antiShake<ysutils::ImageFileName, ysutils::ImageFileName>(fnames, dst, intermediateMethod, displayScale);
 	}
 	else {
 		cerr << "processed source is unrecognized" << endl;
@@ -388,7 +393,7 @@ int main(int argc, char** argv){
 
 		cout << "start combined algorithm" << endl;
 		cv::Mat dst;
-		ohd3PlusOhd4(fcompRes, labelImages, resizeDst, dst);
+		antishake::ohd3PlusOhd4(fcompRes, labelImages, resizeDst, dst);
 		
 		cv::imwrite("resulg_ohd3_ohd4.jpg", dst);
 
